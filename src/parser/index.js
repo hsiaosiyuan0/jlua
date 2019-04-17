@@ -286,12 +286,25 @@ export class Parser {
       if (tok.isSign(Sign.Comma)) this.lexer.next();
       else break;
     }
+
+    // if the ahead token is Assign then the subsequent expression is a expression-list
+    // they together construct a assignment-expression otherwise if there is only one child
+    // of left.expressions and it's a CallExpression that also means succeeded
+    let tok = this.lexer.peek();
+    if (
+      !tok.isSign(Sign.Assign) &&
+      left.expressions.length === 1 &&
+      left.expressions[0] instanceof CallExpression
+    ) {
+      return left.expressions[0];
+    }
     this.nextMustBeSign(Sign.Assign);
+
     while (true) {
       const exp = this.parseExp();
       if (exp === null) this.raiseUnexpectedTokErr("expr");
       right.expressions.push(exp);
-      const tok = this.lexer.peek();
+      tok = this.lexer.peek();
       if (tok.isSign(Sign.Comma)) this.lexer.next();
       else break;
     }
