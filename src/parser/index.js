@@ -1,6 +1,7 @@
 import { Lexer, TokenType, Token, Sign, Keyword } from "../lexer";
 import {
-  AssignmentExpression,
+  AssignExpression,
+  AssignStatement,
   BlockStatement,
   BooleanLiteral,
   BreakStatement,
@@ -23,7 +24,8 @@ import {
   UnaryExpression,
   VariableDeclaration,
   VarArgExpression,
-  WhileStatement
+  WhileStatement,
+  CallStatement
 } from "./node";
 
 // grammar details can be referenced from http://www.lua.org/manual/5.1/manual.html#2.2
@@ -104,7 +106,7 @@ export class Parser {
 
   parseStmt() {
     const tok = this.lexer.peek();
-    if (tok.isSign(Sign.Semi)) {
+    if (tok.isSign(Sign.Semi) || tok.isComment()) {
       this.lexer.next();
       return this.parseStmt();
     } else if (tok.isKeyword(Keyword.Function)) {
@@ -209,7 +211,7 @@ export class Parser {
     if (tok.isSign(Sign.Comma)) return this.parseForInStmt(id);
 
     this.nextMustBeSign(Sign.Assign);
-    const exp1 = new AssignmentExpression();
+    const exp1 = new AssignExpression();
     exp1.left = new SequenceExpression();
     exp1.left.expressions.push(id);
     exp1.right = new SequenceExpression();
@@ -336,12 +338,13 @@ export class Parser {
     // they together construct a assignment-expression otherwise if there is only one child
     // of left.expressions and it's a CallExpression that also means succeeded
     let tok = this.lexer.peek();
-    if (
-      !tok.isSign(Sign.Assign) &&
-      left.expressions.length === 1 &&
-      left.expressions[0] instanceof CallExpression
-    ) {
-      return left.expressions[0];
+    if (!tok.isSign(Sign.Assign) && left.expressions.length === 1) {
+      const expr = left.expressions[0];
+      if (expr instanceof CallExpression) {
+        const node = new CallStatement();
+        node.expr = expr;
+        return node;
+      }
     }
     this.nextMustBeSign(Sign.Assign);
 
@@ -353,9 +356,11 @@ export class Parser {
       if (tok.isSign(Sign.Comma)) this.lexer.next();
       else break;
     }
-    const node = new AssignmentExpression();
-    node.left = left;
-    node.right = right;
+    const node = new AssignStatement();
+    const expr = new AssignExpression();
+    expr.left = left;
+    expr.right = right;
+    node.expr = expr;
     return node;
   }
 

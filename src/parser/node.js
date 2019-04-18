@@ -13,9 +13,11 @@ export class NodeType {
   static MemberExpression = "MemberExpression";
   static UnaryExpression = "UnaryExpression";
   static VarArgExpression = "VarArgExpression";
-  static CallExpression = "CallExpression";
   static SequenceExpression = "SequenceExpression";
-  static AssignmentExpression = "AssignmentExpression";
+  static CallExpression = "CallExpression";
+  static AssignExpression = "AssignExpression";
+  static CallStatement = "CallStatement";
+  static AssignStatement = "AssignStatement";
   static Function = "Function";
   static BlockStatement = "BlockStatement";
   static BreakStatement = "BreakStatement";
@@ -38,7 +40,7 @@ export class Statement extends Node {}
 
 export class LastStatement extends Statement {}
 
-export class Chunk {
+export class Chunk extends Node {
   type = NodeType.Chunk;
   /** @type {Array<Statement|LastStatement>} */
   body = [];
@@ -124,18 +126,30 @@ export class CallExpression extends Expression {
   args = [];
 }
 
+export class AssignExpression extends Expression {
+  type = NodeType.AssignExpression;
+  /** @type SequenceExpression */
+  left = null;
+  /** @type SequenceExpression */
+  right = null;
+}
+
 export class SequenceExpression extends Expression {
   type = NodeType.SequenceExpression;
   /** @type Array<Expression|Identifier> */
   expressions = [];
 }
 
-export class AssignmentExpression extends Expression {
-  type = NodeType.AssignmentExpression;
-  /** @type SequenceExpression */
-  left = null;
-  /** @type SequenceExpression */
-  right = null;
+export class CallStatement extends Statement {
+  type = NodeType.CallStatement;
+  /** @type CallExpression */
+  expr = null;
+}
+
+export class AssignStatement extends Statement {
+  type = NodeType.AssignStatement;
+  /** @type AssignExpression */
+  expr = null;
 }
 
 export class BlockStatement extends Statement {
@@ -160,7 +174,7 @@ export class WhileStatement extends Statement {
   /** @type Expression */
   test = null;
   /** @type Statement[] */
-  body = null;
+  body = [];
 }
 
 export class RepeatStatement extends Statement {
@@ -168,19 +182,19 @@ export class RepeatStatement extends Statement {
   /** @type Expression */
   test = null;
   /** @type Statement[] */
-  body = null;
+  body = [];
 }
 
 export class ForStatement extends Statement {
   type = NodeType.ForStatement;
-  /** @type AssignmentExpression */
+  /** @type AssignExpression */
   exp1 = null;
   /** @type Expression */
   exp2 = null;
   /** @type Expression */
   exp3 = null;
   /** @type Statement[] */
-  body = null;
+  body = [];
 }
 
 export class ForInStatement extends Statement {
@@ -216,6 +230,7 @@ export class FunctionDefStmt extends Node {
   /** @type Identifier */
   id = null;
   params = [];
+  /** @type Statement[] */
   body = null;
   isLocal = false;
 }
