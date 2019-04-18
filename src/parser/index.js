@@ -21,7 +21,8 @@ import {
   WhileStatement,
   Identifier,
   BinaryExpression,
-  ReturnStatement
+  ReturnStatement,
+  IfStatement
 } from "./node";
 
 // grammar details can be referenced from http://www.lua.org/manual/5.1/manual.html#2.2
@@ -90,38 +91,71 @@ export class Parser {
     return args;
   }
 
+  parseStmt() {
+    const tok = this.lexer.peek();
+    if (tok.isSign(Sign.Semi)) {
+      this.lexer.next();
+      return this.parseStmt();
+    } else if (tok.isKeyword(Keyword.Function)) {
+      return this.parseFunDefStmt();
+    } else if (tok.isKeyword(Keyword.Break)) {
+      return this.parseBreakStmt;
+    } else if (tok.isKeyword(Keyword.Do)) {
+      return this.parseDoStmt();
+    } else if (tok.isKeyword(Keyword.While)) {
+      return this.parseWhileStmt();
+    } else if (tok.isKeyword(Keyword.Repeat)) {
+      return this.parseRepeatStmt();
+    } else if (tok.isKeyword(Keyword.For)) {
+      return this.parseForStmt();
+    } else if (tok.isKeyword(Keyword.If)) {
+      return this.parseIfStmt();
+    } else if (tok.isKeyword(Keyword.Local)) {
+      return this.parseVarDecStmt();
+    } else if (tok.isKeyword(Keyword.Return)) {
+      return this.parseReturnStmt();
+    } else {
+      return this.parseVarList();
+    }
+  }
+
   parseStmts(stop) {
     const stmts = [];
     while (true) {
       let tok = this.lexer.peek();
-      if (stop !== undefined && tok.isKeyword(stop)) {
-        this.lexer.next();
-        break;
-      } else if (tok.isEof()) {
-        break;
-      } else if (tok.isSign(Sign.Semi)) {
-        this.lexer.next();
-      } else if (tok.isKeyword(Keyword.Function)) {
-        stmts.push(this.parseFunDefStmt());
-      } else if (tok.isKeyword(Keyword.Break)) {
-        stmts.push(this.parseBreakStmt);
-      } else if (tok.isKeyword(Keyword.Do)) {
-        stmts.push(this.parseDoStmt());
-      } else if (tok.isKeyword(Keyword.While)) {
-        stmts.push(this.parseWhileStmt());
-      } else if (tok.isKeyword(Keyword.Repeat)) {
-        stmts.push(this.parseRepeatStmt());
-      } else if (tok.isKeyword(Keyword.For)) {
-        stmts.push(this.parseForStmt());
-      } else if (tok.isKeyword(Keyword.Local)) {
-        stmts.push(this.parseVarDecStmt());
-      } else if (tok.isKeyword(Keyword.Return)) {
-        stmts.push(this.parseReturnStmt());
-      } else {
-        stmts.push(this.parseVarList());
-      }
+      if ((stop !== undefined && tok.isKeyword(stop)) || tok.isEof()) break;
+      stmts.push(this.parseStmt());
     }
+    if (stop !== undefined) this.nextMustBeKeyword(stop);
     return stmts;
+  }
+
+  parseIfStmt() {
+    this.lexer.next();
+    const node = new IfStatement();
+    node.test = this.parseExp();
+    this.nextMustBeKeyword(Keyword.Then);
+    let tok;
+    while (true) {
+      node.consequent.push(this.parseStmt());
+      tok = this.lexer.peek();
+      if (tok.isOneOfKeywords([Keyword.Elseif, Keyword.Else, Keyword.End]))
+        break;
+      else this.raiseUnexpectedTokErr("branch or end", tok);
+    }
+    if (tok.isKeyword(Keyword.End)) {
+      this.lexer.next();
+      return node;
+    } else if (tok.isKeyword(Keyword.Else)) {
+      this.lexer.next();
+      const alt = new BlockStatement();
+      alt.body = this.parseStmts(Keyword.End);
+      node.alternate = alt;
+      return node;
+    } else if (tok.isKeyword(Keyword.Elseif)) {
+      node.alternate = this.parseIfStmt();
+      return node;
+    }
   }
 
   parseVarDecStmt() {
@@ -450,7 +484,7 @@ export class Parser {
     this.lexer.next();
     const args = [];
     while (true) {
-      const arg = this.parseVar();
+      const arg = this.parseExp();
       if (arg) args.push(arg);
       let tok = this.lexer.peek();
       if (tok.isSign(Sign.Comma)) {
@@ -511,7 +545,7 @@ export class Parser {
     return new ParserError(
       `Unexpected token near line #${pos.line} column #${
         pos.column
-      }, expect ${expectType}, got ${tok.text}`
+      }, expect \`${expectType}\`, got \`${tok.text}\``
     );
   }
 

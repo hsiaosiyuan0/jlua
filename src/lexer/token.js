@@ -166,6 +166,7 @@ export class Token {
         "..",
         "+",
         "*",
+        "-",
         "/",
         "//",
         "%",
@@ -192,6 +193,10 @@ export class Token {
 
   isKeyword(k) {
     return this.type === TokenType.Keyword && this.text === k;
+  }
+
+  isOneOfKeywords(ks) {
+    return ks.findIndex(k => this.isKeyword(k)) !== -1;
   }
 
   isName() {

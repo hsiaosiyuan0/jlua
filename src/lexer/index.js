@@ -97,7 +97,7 @@ export class Lexer {
   makeUnexpectedErr(expect, actual) {
     if (actual === undefined) actual = this.src.ch;
     return new LexerError(
-      `expect '${expect}' but got '${actual}' at line #${
+      `expect \`${expect}\` but got \`${actual}\` at line #${
         this.src.line
       } column #${this.src.col}`
     );

@@ -25,6 +25,7 @@ export class NodeType {
   static ForInStatement = "ForInStatement";
   static VariableDeclaration = "VariableDeclaration";
   static ReturnStatement = "ReturnStatement";
+  static IfStatement = "IfStatement";
 }
 
 export class Node {
@@ -185,6 +186,16 @@ export class ForInStatement extends Statement {
   expList = [];
   /** @type Statement[] */
   body = [];
+}
+
+export class IfStatement extends Statement {
+  type = NodeType.IfStatement;
+  /** @type Expression */
+  test = null;
+  /** @type Statement[] */
+  consequent = [];
+  /** @type Statement */
+  alternate = null;
 }
 
 export class VariableDeclaration extends Statement {
