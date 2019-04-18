@@ -12,6 +12,7 @@ export class NodeType {
   static BinaryExpression = "BinaryExpression";
   static MemberExpression = "MemberExpression";
   static UnaryExpression = "UnaryExpression";
+  static VarArgExpression = "VarArgExpression";
   static CallExpression = "CallExpression";
   static SequenceExpression = "SequenceExpression";
   static AssignmentExpression = "AssignmentExpression";
@@ -96,6 +97,10 @@ export class UnaryExpression extends Expression {
   operator = "";
   /** @type Expression */
   argument = null;
+}
+
+export class VarArgExpression extends Expression {
+  type = NodeType.VarArgExpression;
 }
 
 export class NilLiteral extends Literal {

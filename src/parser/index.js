@@ -4,25 +4,26 @@ import {
   BlockStatement,
   BooleanLiteral,
   BreakStatement,
+  BinaryExpression,
   CallExpression,
   Chunk,
   DoStatement,
   ForInStatement,
   ForStatement,
   FunctionDefStmt,
+  Identifier,
+  IfStatement,
   MemberExpression,
   NilLiteral,
   NumericLiteral,
   RepeatStatement,
+  ReturnStatement,
   SequenceExpression,
   StringLiteral,
   UnaryExpression,
   VariableDeclaration,
-  WhileStatement,
-  Identifier,
-  BinaryExpression,
-  ReturnStatement,
-  IfStatement
+  VarArgExpression,
+  WhileStatement
 } from "./node";
 
 // grammar details can be referenced from http://www.lua.org/manual/5.1/manual.html#2.2
@@ -81,11 +82,21 @@ export class Parser {
         this.lexer.next();
         continue;
       }
-      tok = this.nextMustBeName();
-      const id = new Identifier();
-      id.name = tok.text;
-      id.loc = tok.loc;
-      args.push(id);
+      tok = this.lexer.peek();
+      if (tok.isName()) {
+        this.lexer.next();
+        const id = new Identifier();
+        id.name = tok.text;
+        id.loc = tok.loc;
+        args.push(id);
+      } else if (tok.isSign(Sign.Dot3)) {
+        this.lexer.next();
+        const arg = new VarArgExpression();
+        arg.loc = tok.loc;
+        args.push(arg);
+      } else {
+        this.raiseUnexpectedTokErr("name or varargs", tok);
+      }
     }
     this.nextMustBeSign(Sign.ParenR);
     return args;
@@ -425,6 +436,12 @@ export class Parser {
       const node = new UnaryExpression();
       node.operator = tok.text;
       node.argument = this.parsePrimary();
+      return node;
+    }
+    if (tok.isSign(Sign.Dot3)) {
+      tok = this.lexer.next();
+      const node = new VarArgExpression();
+      node.loc = tok.loc;
       return node;
     }
     return null;
