@@ -148,6 +148,10 @@ export class Token {
     return this.type === TokenType.Sign && this.text === s;
   }
 
+  isComment() {
+    return this.type === TokenType.Comment;
+  }
+
   isBinOp() {
     return (
       [

@@ -11,7 +11,8 @@ import {
   DoStatement,
   ForInStatement,
   ForStatement,
-  FunctionDefStmt,
+  FunctionDecExpr,
+  FunctionDecStmt,
   Identifier,
   IfStatement,
   MemberExpression,
@@ -45,9 +46,9 @@ export class Parser {
     return node;
   }
 
-  parseFunDefStmt() {
+  parseFunDecStmt() {
     this.lexer.next();
-    const node = new FunctionDefStmt();
+    const node = new FunctionDecStmt();
     node.id = this.parseFunName();
     node.params = this.parseFunFormalArgs();
     node.body = this.parseStmts(Keyword.End);
@@ -110,7 +111,7 @@ export class Parser {
       this.lexer.next();
       return this.parseStmt();
     } else if (tok.isKeyword(Keyword.Function)) {
-      return this.parseFunDefStmt();
+      return this.parseFunDecStmt();
     } else if (tok.isKeyword(Keyword.Break)) {
       return this.parseBreakStmt;
     } else if (tok.isKeyword(Keyword.Do)) {
@@ -177,7 +178,7 @@ export class Parser {
     if (tok.isKeyword(Keyword.Function)) {
       this.lexer.next();
       const name = this.nextMustBeName();
-      const node = new FunctionDefStmt();
+      const node = new FunctionDecStmt();
       node.id = new Identifier();
       node.id.name = name.text;
       node.id.loc = name.loc;
@@ -196,7 +197,7 @@ export class Parser {
     tok = this.lexer.peek();
     if (tok.isSign(Sign.Assign)) {
       this.lexer.next();
-      node.expList = this.parseExpList();
+      node.exprList = this.parseExprList();
     }
     return node;
   }
@@ -234,7 +235,7 @@ export class Parser {
   parseForInStmt(first) {
     const node = new ForInStatement();
     node.nameList = this.parseNameList(first, Keyword.In);
-    node.expList = this.parseExpList(Keyword.Do);
+    node.exprList = this.parseExprList(Keyword.Do);
     node.body = this.parseStmts(Keyword.End);
     return node;
   }
@@ -256,19 +257,19 @@ export class Parser {
     return names;
   }
 
-  parseExpList(stop) {
-    const expList = [];
+  parseExprList(stop) {
+    const exprList = [];
     while (true) {
       const exp = this.parseExp();
       if (exp === null)
         this.raiseUnexpectedTokErr("Expression", this.lexer.token);
-      expList.push(exp);
+      exprList.push(exp);
       const tok = this.lexer.peek();
       if (tok.isSign(Sign.Comma)) this.lexer.next();
       else break;
     }
     if (stop !== undefined) this.nextMustBeKeyword(stop);
-    return expList;
+    return exprList;
   }
 
   parseRepeatStmt() {
@@ -318,7 +319,7 @@ export class Parser {
     const tok = this.lexer.next();
     const node = new ReturnStatement();
     node.loc = tok.loc;
-    node.body = this.parseExpList();
+    node.body = this.parseExprList();
     return node;
   }
 
@@ -403,7 +404,7 @@ export class Parser {
       tok = this.lexer.next();
       const node = new NumericLiteral();
       node.loc = tok.loc;
-      node.setValue(tok.text);
+      node.value = tok.text;
       return node;
     }
     if (tok.isString()) {
@@ -416,7 +417,7 @@ export class Parser {
     if (tok.isBoolean()) {
       tok = this.lexer.next();
       const node = new BooleanLiteral();
-      node.setValue(tok.text);
+      node.value = tok.text;
       node.loc = tok.loc;
       return node;
     }
@@ -447,6 +448,14 @@ export class Parser {
       tok = this.lexer.next();
       const node = new VarArgExpression();
       node.loc = tok.loc;
+      return node;
+    }
+    if (tok.isKeyword(Keyword.Function)) {
+      tok = this.lexer.next();
+      const node = new FunctionDecExpr();
+      node.loc = tok.loc;
+      node.params = this.parseFunFormalArgs();
+      node.body = this.parseStmts(Keyword.End);
       return node;
     }
     return null;

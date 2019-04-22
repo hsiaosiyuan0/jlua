@@ -15,6 +15,7 @@ export class NodeType {
   static VarArgExpression = "VarArgExpression";
   static SequenceExpression = "SequenceExpression";
   static CallExpression = "CallExpression";
+  static FunctionDecExpr = "FunctionDecExpr";
   static AssignExpression = "AssignExpression";
   static CallStatement = "CallStatement";
   static AssignStatement = "AssignStatement";
@@ -67,22 +68,12 @@ export class StringLiteral extends Literal {
 
 export class BooleanLiteral extends Literal {
   type = NodeType.BooleanLiteral;
-  value = false;
-
-  setValue(v) {
-    if (typeof v === "string") this.value = v === "true";
-    else this.value = v;
-  }
+  value = "";
 }
 
 export class NumericLiteral extends Literal {
   type = NodeType.NumericLiteral;
-  value = 0;
-
-  setValue(v) {
-    if (typeof v === "string") this.value = parseFloat(v);
-    else this.value = v;
-  }
+  value = "";
 }
 
 export class BinaryExpression extends Expression {
@@ -132,6 +123,15 @@ export class AssignExpression extends Expression {
   left = null;
   /** @type SequenceExpression */
   right = null;
+}
+
+export class FunctionDecExpr extends Expression {
+  type = NodeType.FunctionDecExpr;
+  id = null;
+  params = [];
+  /** @type Statement[] */
+  body = null;
+  isLocal = false;
 }
 
 export class SequenceExpression extends Expression {
@@ -202,7 +202,7 @@ export class ForInStatement extends Statement {
   /** @type Identifier[] */
   nameList = [];
   /** @type Expression[] */
-  expList = [];
+  exprList = [];
   /** @type Statement[] */
   body = [];
 }
@@ -222,10 +222,10 @@ export class VariableDeclaration extends Statement {
   /** @type Identifier[] */
   nameList = null;
   /** @type Expression[] */
-  expList = null;
+  exprList = null;
 }
 
-export class FunctionDefStmt extends Node {
+export class FunctionDecStmt extends Node {
   type = NodeType.Function;
   /** @type Identifier */
   id = null;
