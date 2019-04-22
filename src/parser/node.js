@@ -104,7 +104,7 @@ export class MemberExpression extends Expression {
   type = NodeType.MemberExpression;
   /** @type Expression */
   object = null;
-  /** @type Expression */
+  /** @type Expression|Identifier */
   property = null;
   computed = false;
 }
@@ -220,9 +220,9 @@ export class IfStatement extends Statement {
 export class VariableDeclaration extends Statement {
   type = NodeType.VariableDeclaration;
   /** @type Identifier[] */
-  nameList = null;
+  nameList = [];
   /** @type Expression[] */
-  exprList = null;
+  exprList = [];
 }
 
 export class FunctionDecStmt extends Node {

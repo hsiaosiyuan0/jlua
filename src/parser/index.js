@@ -57,20 +57,35 @@ export class Parser {
 
   parseFunName() {
     const name = this.nextMustBeName();
-    const tok = this.lexer.peek();
-    const left = new Identifier();
+    let left = new Identifier();
     left.name = name.text;
     left.loc = name.loc;
-    if (tok.isSign(Sign.Colon)) {
-      const node = new BinaryExpression();
-      node.operator = Sign.Colon;
-      node.left = left;
-      const r = this.nextMustBeName();
-      const rhs = new Identifier();
-      rhs.name = r.text;
-      rhs.loc = r.loc;
-      node.right = rhs;
-      return node;
+    let metColon = false;
+    while (true) {
+      let tok = this.lexer.peek();
+      if (tok.isSign(Sign.Dot)) {
+        const node = new MemberExpression();
+        node.object = left;
+        this.lexer.next();
+        const prop = this.nextMustBeName();
+        node.property = new Identifier();
+        node.property.name = prop.text;
+        node.property.loc = prop.loc;
+        left = node;
+      } else if (tok.isSign(Sign.Colon)) {
+        if (metColon) this.raiseUnexpectedTokErr("(");
+        metColon = true;
+        this.lexer.next();
+        const node = new BinaryExpression();
+        node.operator = Sign.Colon;
+        node.left = left;
+        const r = this.nextMustBeName();
+        const rhs = new Identifier();
+        rhs.name = r.text;
+        rhs.loc = r.loc;
+        node.right = rhs;
+        left = node;
+      } else break;
     }
     return left;
   }
@@ -109,11 +124,11 @@ export class Parser {
     const tok = this.lexer.peek();
     if (tok.isSign(Sign.Semi) || tok.isComment()) {
       this.lexer.next();
-      return this.parseStmt();
+      return null;
     } else if (tok.isKeyword(Keyword.Function)) {
       return this.parseFunDecStmt();
     } else if (tok.isKeyword(Keyword.Break)) {
-      return this.parseBreakStmt;
+      return this.parseBreakStmt();
     } else if (tok.isKeyword(Keyword.Do)) {
       return this.parseDoStmt();
     } else if (tok.isKeyword(Keyword.While)) {
@@ -138,7 +153,8 @@ export class Parser {
     while (true) {
       let tok = this.lexer.peek();
       if ((stop !== undefined && tok.isKeyword(stop)) || tok.isEof()) break;
-      stmts.push(this.parseStmt());
+      const stmt = this.parseStmt();
+      if (stmt !== null) stmts.push(stmt);
     }
     if (stop !== undefined) this.nextMustBeKeyword(stop);
     return stmts;
@@ -151,11 +167,14 @@ export class Parser {
     this.nextMustBeKeyword(Keyword.Then);
     let tok;
     while (true) {
-      node.consequent.push(this.parseStmt());
       tok = this.lexer.peek();
-      if (tok.isOneOfKeywords([Keyword.Elseif, Keyword.Else, Keyword.End]))
-        break;
-      else this.raiseUnexpectedTokErr("branch or end", tok);
+      let isEnd = tok.isOneOfKeywords([
+        Keyword.Elseif,
+        Keyword.Else,
+        Keyword.End
+      ]);
+      if (isEnd || tok.isEof()) break;
+      node.consequent.push(this.parseStmt());
     }
     if (tok.isKeyword(Keyword.End)) {
       this.lexer.next();
@@ -205,7 +224,7 @@ export class Parser {
   parseForStmt() {
     this.lexer.next();
     const name = this.nextMustBeName();
-    let tok = this.lexer.next();
+    let tok = this.lexer.peek();
     const id = new Identifier();
     id.name = name.text;
     id.loc = name.loc;
@@ -230,6 +249,7 @@ export class Parser {
     node.exp2 = exp23[0];
     node.exp3 = exp23[1];
     node.body = this.parseStmts(Keyword.End);
+    return node;
   }
 
   parseForInStmt(first) {
@@ -261,8 +281,7 @@ export class Parser {
     const exprList = [];
     while (true) {
       const exp = this.parseExp();
-      if (exp === null)
-        this.raiseUnexpectedTokErr("Expression", this.lexer.token);
+      if (exp === null) break;
       exprList.push(exp);
       const tok = this.lexer.peek();
       if (tok.isSign(Sign.Comma)) this.lexer.next();
@@ -441,7 +460,11 @@ export class Parser {
       tok = this.lexer.next();
       const node = new UnaryExpression();
       node.operator = tok.text;
-      node.argument = this.parsePrimary();
+      let arg = this.parsePrimary();
+      const ahead = this.lexer.peek();
+      if (ahead.isSign() && ahead.prec > tok.getPrec(true))
+        arg = this.parseExpOp(arg, 0);
+      node.argument = arg;
       return node;
     }
     if (tok.isSign(Sign.Dot3)) {
@@ -491,7 +514,10 @@ export class Parser {
         const callee = new BinaryExpression();
         callee.operator = Sign.Colon;
         callee.left = left;
-        callee.right = rhs;
+        const id = new Identifier();
+        id.name = rhs.text;
+        id.loc = rhs.loc;
+        callee.right = id;
         left = this.parseFunCall(callee);
       } else if (tok.isSign(Sign.ParenL)) {
         left = this.parseFunCall(left);
@@ -551,6 +577,7 @@ export class Parser {
     const node = new MemberExpression();
     node.object = left;
     node.property = this.parseExp();
+    node.computed = true;
     this.nextMustBeSign(Sign.BracketR);
     return node;
   }
@@ -559,7 +586,11 @@ export class Parser {
     this.lexer.next();
     const node = new MemberExpression();
     node.object = left;
-    node.property = this.nextMustBeName();
+    const tok = this.nextMustBeName();
+    const id = new Identifier();
+    id.name = tok.text;
+    id.loc = tok.loc;
+    node.property = id;
     node.computed = false;
     return node;
   }

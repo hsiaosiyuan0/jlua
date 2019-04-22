@@ -53,7 +53,7 @@ export class TestAstVisitor extends AstVisitor {
     return {
       type: "ForStmt",
       init: [node.exp1, node.exp2, node.exp3].map(
-        expr => node.expr && this.visitExpr(expr)
+        expr => expr && this.visitExpr(expr)
       ),
       body: node.body.map(stmt => this.visitStmt(stmt))
     };
@@ -88,7 +88,7 @@ export class TestAstVisitor extends AstVisitor {
     return {
       type: "CallStmt",
       callee: this.visitExpr(node.callee),
-      exprList: node.args.map(arg => this.visitExpr(arg))
+      args: node.args.map(arg => this.visitExpr(arg))
     };
   }
 
@@ -97,7 +97,7 @@ export class TestAstVisitor extends AstVisitor {
       type: "IfStmt",
       test: this.visitExpr(node.test),
       then: node.consequent.map(stmt => this.visitStmt(stmt)),
-      else: node.alternate.map(stmt => this.visitStmt(stmt))
+      else: node.alternate === null ? null : this.visitStmt(node.alternate)
     };
   }
 
@@ -116,7 +116,7 @@ export class TestAstVisitor extends AstVisitor {
   }
 
   visitStringLiteral(node) {
-    return { type: "String", value: node.text };
+    return { type: "String", value: node.value };
   }
 
   visitNumberLiteral(node) {
@@ -140,7 +140,7 @@ export class TestAstVisitor extends AstVisitor {
     return {
       type: "MemberExpr",
       obj: this.visitExpr(node.object),
-      prop: this.visitExpr(node.prop),
+      prop: this.visitExpr(node.property),
       computed: node.computed
     };
   }
@@ -149,7 +149,7 @@ export class TestAstVisitor extends AstVisitor {
     return {
       type: "UnaryExpr",
       op: node.operator,
-      argument: this.visitExpr(node.argument)
+      arg: this.visitExpr(node.argument)
     };
   }
 
@@ -163,7 +163,7 @@ export class TestAstVisitor extends AstVisitor {
     return {
       type: "CallExpr",
       callee: this.visitExpr(node.callee),
-      exprList: node.args.map(arg => this.visitExpr(arg))
+      args: node.args.map(arg => this.visitExpr(arg))
     };
   }
 

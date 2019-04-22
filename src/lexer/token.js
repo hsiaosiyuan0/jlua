@@ -91,8 +91,8 @@ export class Precedence {
     signs.forEach(s => {
       let item = this.table[s];
       if (item === undefined) item = [0, 0];
-      if (unary) item[1] = prec;
-      else item[0] = prec;
+      if (unary) item[1] = prec++;
+      else item[0] = prec++;
       this.table[s] = item;
     });
   }
@@ -104,21 +104,19 @@ export class Precedence {
   }
 }
 
-Precedence.define(14, "(", true);
-Precedence.define(13, ["[", "(", "."]);
-Precedence.define(12, ["not"]);
-Precedence.define(12, ["!", "~", "-"], true);
-Precedence.define(11, "^");
-Precedence.define(10, "#", true);
-Precedence.define(9, ["*", "/", "%", "//"]);
-Precedence.define(8, ["+", "-"]);
-Precedence.define(7, ["<<", ">>"]);
-Precedence.define(6, ["<", "<=", ">", ">="]);
-Precedence.define(5, ["==", "~="]);
-Precedence.define(4, "&");
-Precedence.define(3, "~");
-Precedence.define(2, "and");
-Precedence.define(1, "or");
+Precedence.define(80, "(", true);
+Precedence.define(70, ["[", "(", "."]);
+Precedence.define(60, "^");
+Precedence.define(55, ["not"]);
+Precedence.define(50, ["!", "~", "-"], true);
+Precedence.define(45, "#", true);
+Precedence.define(35, ["*", "/", "//", "%"]);
+Precedence.define(30, [".."]);
+Precedence.define(25, ["+", "-"]);
+Precedence.define(20, ["<<", ">>"]);
+Precedence.define(15, ["|", "~", "&"]);
+Precedence.define(5, ["<", ">", "<=", ">=", "~=", "=="]);
+Precedence.define(1, ["or", "and"]);
 
 export class Token {
   constructor(type, loc, text) {
@@ -129,6 +127,11 @@ export class Token {
 
   get prec() {
     return Precedence.of(this.text);
+  }
+
+  getPrec(unary) {
+    unary = unary === undefined ? this.isUnary() : unary;
+    return Precedence.of(this.text, unary);
   }
 
   setStart(lex) {
@@ -164,6 +167,7 @@ export class Token {
         "~=",
         "==",
         "~",
+        "|",
         "&",
         ">>",
         "<<",

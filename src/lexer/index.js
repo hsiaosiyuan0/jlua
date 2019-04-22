@@ -202,7 +202,7 @@ export class Lexer {
     const name = chs.join("");
     let type = TokenType.Name;
     if (Lexer.isKeyword(name)) type = TokenType.Keyword;
-    else if (name === "nil") type = TokenType.Nil;
+    if (name === "nil") type = TokenType.Nil;
     else if (name === "true" || name === "false") type = TokenType.Boolean;
     tok.type = type;
     tok.text = name;
@@ -436,7 +436,7 @@ export class Lexer {
         chs.push(this.src.read());
         tok.setStart(this);
         ch = this.src.peek();
-        if (ch === "=") chs.push(ch);
+        if (ch === "=") chs.push(this.src.read());
         break;
       }
       case ">":
