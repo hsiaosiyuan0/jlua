@@ -342,6 +342,7 @@ export class Parser {
     return node;
   }
 
+  // parses VarList or CallStmt
   parseVarList() {
     const left = new SequenceExpression();
     const right = new SequenceExpression();
@@ -354,8 +355,8 @@ export class Parser {
       else break;
     }
 
-    // if the ahead token is Assign then the subsequent expression is a expression-list
-    // they together construct a assignment-expression otherwise if there is only one child
+    // if the ahead token is Assign and the subsequent expression is a expression-list
+    // they together constructs a assignment-expression otherwise if there is only one child
     // of left.expressions and it's a CallExpression that also means succeeded
     let tok = this.lexer.peek();
     if (!tok.isSign(Sign.Assign) && left.expressions.length === 1) {
