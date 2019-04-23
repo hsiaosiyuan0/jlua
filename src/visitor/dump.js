@@ -1,7 +1,7 @@
 import { AstVisitor } from "./visitor";
 import { ObjectProperty } from "../parser";
 
-export class TestAstVisitor extends AstVisitor {
+export class DumpVisitor extends AstVisitor {
   visitChunk(node) {
     return {
       type: node.type,

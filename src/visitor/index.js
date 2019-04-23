@@ -1,2 +1,2 @@
 export * from "./visitor";
-export * from "./test-visitor";
+export * from "./dump";
