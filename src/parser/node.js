@@ -17,6 +17,10 @@ export class NodeType {
   static CallExpression = "CallExpression";
   static FunctionDecExpr = "FunctionDecExpr";
   static AssignExpression = "AssignExpression";
+  static ObjectExpression = "ObjectExpression";
+  static ObjectMember = "ObjectMember";
+  static ObjectProperty = "ObjectProperty";
+  static ObjectMethod = "ObjectMethod";
   static CallStatement = "CallStatement";
   static AssignStatement = "AssignStatement";
   static Function = "Function";
@@ -138,6 +142,33 @@ export class SequenceExpression extends Expression {
   type = NodeType.SequenceExpression;
   /** @type Array<Expression|Identifier> */
   expressions = [];
+}
+
+export class ObjectExpression extends Expression {
+  type = NodeType.ObjectExpression;
+  /** @type Array<ObjectProperty|ObjectMethod> */
+  properties = [];
+}
+
+export class ObjectMember extends Node {
+  type = NodeType.ObjectMember;
+  /** @type Expression|Identifier|NumericLiteral */
+  key = null;
+  computed = false;
+}
+
+export class ObjectProperty extends ObjectMember {
+  type = NodeType.ObjectProperty;
+  /** @type Expression */
+  value = null;
+}
+
+export class ObjectMethod extends ObjectMember {
+  type = NodeType.ObjectMethod;
+  params = [];
+  /** @type Statement[] */
+  body = null;
+  isLocal = true;
 }
 
 export class CallStatement extends Statement {

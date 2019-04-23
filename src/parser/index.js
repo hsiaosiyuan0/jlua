@@ -7,6 +7,7 @@ import {
   BreakStatement,
   BinaryExpression,
   CallExpression,
+  CallStatement,
   Chunk,
   DoStatement,
   ForInStatement,
@@ -18,6 +19,9 @@ import {
   MemberExpression,
   NilLiteral,
   NumericLiteral,
+  ObjectExpression,
+  ObjectMethod,
+  ObjectProperty,
   RepeatStatement,
   ReturnStatement,
   SequenceExpression,
@@ -25,8 +29,7 @@ import {
   UnaryExpression,
   VariableDeclaration,
   VarArgExpression,
-  WhileStatement,
-  CallStatement
+  WhileStatement
 } from "./node";
 
 // grammar details can be referenced from http://www.lua.org/manual/5.1/manual.html#2.2
@@ -482,7 +485,66 @@ export class Parser {
       node.body = this.parseStmts(Keyword.End);
       return node;
     }
+    if (tok.isSign(Sign.BraceL)) {
+      return this.parseTableConstructor();
+    }
     return null;
+  }
+
+  parseTableConstructor() {
+    this.nextMustBeSign(Sign.BraceL);
+    const node = new ObjectExpression();
+    let idx = 1;
+    while (true) {
+      let prop;
+      let key;
+      let value;
+      let computed = false;
+      let tok = this.lexer.peek();
+      if (tok.isSign(Sign.Comma) || tok.isSign(Sign.Semi)) {
+        this.lexer.next();
+        continue;
+      }
+      if (tok.isSign(Sign.BraceR) || tok.isEof()) {
+        this.lexer.next();
+        break;
+      }
+      if (tok.isSign(Sign.BracketL)) {
+        this.lexer.next();
+        key = this.parseExp();
+        this.nextMustBeSign(Sign.BracketR);
+        this.nextMustBeSign(Sign.Assign);
+        value = this.parseExp();
+        computed = true;
+      } else {
+        key = this.parseExp();
+        if (key === null) this.raiseUnexpectedTokErr("expr");
+        tok = this.lexer.peek();
+        if (tok.isSign(Sign.Assign)) {
+          if (!(key instanceof Identifier))
+            this.raiseUnexpectedTokErr("identifier");
+          this.lexer.next();
+          value = this.parseExp();
+        } else {
+          value = key;
+          key = new NumericLiteral();
+          key.value = (idx++).toString();
+        }
+      }
+      if (value instanceof FunctionDecExpr) {
+        prop = new ObjectMethod();
+        prop.params = value.params;
+        prop.body = value.body;
+        prop.key = key;
+      } else {
+        prop = new ObjectProperty();
+        prop.key = key;
+        prop.value = value;
+        prop.computed = computed;
+      }
+      node.properties.push(prop);
+    }
+    return node;
   }
 
   parseVar() {

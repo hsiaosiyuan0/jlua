@@ -262,15 +262,16 @@ export class Lexer {
   }
 
   readString() {
-    let ch = this.src.peek();
+    let ahead = this.src.peek(2);
     if (
-      ch !== "'" &&
-      ch !== '"' &&
-      !((Lexer.isWhitespace(this.src.ch) || this.src.ch === "") && ch === "[")
+      ahead[0] !== "'" &&
+      ahead[0] !== '"' &&
+      ahead !== "[[" &&
+      ahead !== "[="
     )
       return null;
 
-    this.src.read();
+    let ch = this.src.read();
     const tok = new Token(TokenType.String);
     tok.setStart(this);
 

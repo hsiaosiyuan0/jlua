@@ -1,4 +1,5 @@
 import { AstVisitor } from "./visitor";
+import { ObjectProperty } from "../parser";
 
 export class TestAstVisitor extends AstVisitor {
   visitChunk(node) {
@@ -176,7 +177,38 @@ export class TestAstVisitor extends AstVisitor {
   visitFunctionDecExpr(node) {
     return {
       type: "FunDecExpr",
-      id: null,
+      id: node.id,
+      params: node.params.map(p => this.visitExpr(p)),
+      body: node.body.map(expr => this.visitStmt(expr)),
+      isLocal: node.isLocal
+    };
+  }
+
+  visitObjectExpression(node) {
+    return {
+      type: "ObjExpr",
+      props: node.properties.map(mbr => this.visitObjectMember(mbr))
+    };
+  }
+
+  visitObjectMember(node) {
+    if (node instanceof ObjectProperty) return this.visitObjectProperty(node);
+    return this.visitObjectMethod(node);
+  }
+
+  visitObjectProperty(node) {
+    return {
+      type: "ObjProp",
+      key: this.visitExpr(node.key),
+      value: this.visitExpr(node.value),
+      computed: node.computed
+    };
+  }
+
+  visitObjectMethod(node) {
+    return {
+      type: "ObjMethod",
+      key: this.visitExpr(node.key),
       params: node.params.map(p => this.visitExpr(p)),
       body: node.body.map(expr => this.visitStmt(expr)),
       isLocal: node.isLocal

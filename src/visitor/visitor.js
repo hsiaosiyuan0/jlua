@@ -55,6 +55,10 @@ export class AstVisitor {
   visitCallExpr(node) {}
   visitAssignExpr(node) {}
   visitIdentifier(node) {}
+  visitObjectExpression(node) {}
+  visitObjectMember(node) {}
+  visitObjectProperty(node) {}
+  visitObjectMethod(node) {}
 
   visitStmt(node) {
     switch (node.type) {
@@ -117,6 +121,8 @@ export class AstVisitor {
         return this.visitIdentifier(node);
       case NodeType.FunctionDecExpr:
         return this.visitFunctionDecExpr(node);
+      case NodeType.ObjectExpression:
+        return this.visitObjectExpression(node);
     }
   }
 }

@@ -1502,15 +1502,66 @@ code = raw`
 t = { [1] = "alo", alo = 1, 2; }
 `;
 tree = raw`
-
+type: Chunk
+body:
+  - type: AssignStmt
+    left:
+      - type: Id
+        value: t
+    right:
+      - type: ObjExpr
+        props:
+          - type: ObjProp
+            key:
+              type: Number
+              value: '1'
+            value:
+              type: String
+              value: alo
+            computed: true
+          - type: ObjProp
+            key:
+              type: Id
+              value: alo
+            value:
+              type: Number
+              value: '1'
+            computed: false
+          - type: ObjProp
+            key:
+              type: Number
+              value: '1'
+            value:
+              type: Number
+              value: '2'
+            computed: false
 `;
+parse(code, tree);
 
 code = raw`
 t = { 1.5 }
 `;
 tree = raw`
-
+type: Chunk
+body:
+  - type: AssignStmt
+    left:
+      - type: Id
+        value: t
+    right:
+      - type: ObjExpr
+        props:
+          - type: ObjProp
+            key:
+              type: Number
+              value: '1'
+            value:
+              type: Number
+              value: '1.5'
+            computed: false
+            
 `;
+parse(code, tree);
 
 code = raw`
 t = {1,2;
@@ -1519,8 +1570,57 @@ t = {1,2;
 5}
 `;
 tree = raw`
-
+type: Chunk
+body:
+  - type: AssignStmt
+    left:
+      - type: Id
+        value: t
+    right:
+      - type: ObjExpr
+        props:
+          - type: ObjProp
+            key:
+              type: Number
+              value: '1'
+            value:
+              type: Number
+              value: '1'
+            computed: false
+          - type: ObjProp
+            key:
+              type: Number
+              value: '2'
+            value:
+              type: Number
+              value: '2'
+            computed: false
+          - type: ObjProp
+            key:
+              type: Number
+              value: '3'
+            value:
+              type: Number
+              value: '3'
+            computed: false
+          - type: ObjProp
+            key:
+              type: Number
+              value: '4'
+            value:
+              type: Number
+              value: '4'
+            computed: false
+          - type: ObjProp
+            key:
+              type: Number
+              value: '5'
+            value:
+              type: Number
+              value: '5'
+            computed: false
 `;
+parse(code, tree);
 
 code = raw`
 t = {[1]=1,[2]=2;
@@ -1529,39 +1629,207 @@ t = {[1]=1,[2]=2;
 [5]=5}
 `;
 tree = raw`
-
+type: Chunk
+body:
+  - type: AssignStmt
+    left:
+      - type: Id
+        value: t
+    right:
+      - type: ObjExpr
+        props:
+          - type: ObjProp
+            key:
+              type: Number
+              value: '1'
+            value:
+              type: Number
+              value: '1'
+            computed: true
+          - type: ObjProp
+            key:
+              type: Number
+              value: '2'
+            value:
+              type: Number
+              value: '2'
+            computed: true
+          - type: ObjProp
+            key:
+              type: Number
+              value: '3'
+            value:
+              type: Number
+              value: '3'
+            computed: true
+          - type: ObjProp
+            key:
+              type: Number
+              value: '4'
+            value:
+              type: Number
+              value: '4'
+            computed: true
+          - type: ObjProp
+            key:
+              type: Number
+              value: '5'
+            value:
+              type: Number
+              value: '5'
+            computed: true
 `;
+parse(code, tree);
 
 code = raw`
 local t = {{{}}, {"alo"}}
 `;
 tree = raw`
-
+type: Chunk
+body:
+  - type: VarDecStmt
+    nameList:
+      - type: Id
+        value: t
+    exprList:
+      - type: ObjExpr
+        props:
+          - type: ObjProp
+            key:
+              type: Number
+              value: '1'
+            value:
+              type: ObjExpr
+              props:
+                - type: ObjProp
+                  key:
+                    type: Number
+                    value: '1'
+                  value:
+                    type: ObjExpr
+                    props: []
+                  computed: false
+            computed: false
+          - type: ObjProp
+            key:
+              type: Number
+              value: '2'
+            value:
+              type: ObjExpr
+              props:
+                - type: ObjProp
+                  key:
+                    type: Number
+                    value: '1'
+                  value:
+                    type: String
+                    value: alo
+                  computed: false
+            computed: false
 `;
+parse(code, tree);
 
 code = raw`
 local x = 0
 local t = {x}
 `;
 tree = raw`
-
+type: Chunk
+body:
+  - type: VarDecStmt
+    nameList:
+      - type: Id
+        value: x
+    exprList:
+      - type: Number
+        value: '0'
+  - type: VarDecStmt
+    nameList:
+      - type: Id
+        value: t
+    exprList:
+      - type: ObjExpr
+        props:
+          - type: ObjProp
+            key:
+              type: Number
+              value: '1'
+            value:
+              type: Id
+              value: x
+            computed: false
 `;
+parse(code, tree);
 
 code = raw`
 local x = 0
 local t = {x = 1}
 `;
 tree = raw`
-
+type: Chunk
+body:
+  - type: VarDecStmt
+    nameList:
+      - type: Id
+        value: x
+    exprList:
+      - type: Number
+        value: '0'
+  - type: VarDecStmt
+    nameList:
+      - type: Id
+        value: t
+    exprList:
+      - type: ObjExpr
+        props:
+          - type: ObjProp
+            key:
+              type: Id
+              value: x
+            value:
+              type: Number
+              value: '1'
+            computed: false
 `;
+parse(code, tree);
 
 code = raw`
 local x = 0
 local t = {x == 1}
 `;
 tree = raw`
-
+type: Chunk
+body:
+  - type: VarDecStmt
+    nameList:
+      - type: Id
+        value: x
+    exprList:
+      - type: Number
+        value: '0'
+  - type: VarDecStmt
+    nameList:
+      - type: Id
+        value: t
+    exprList:
+      - type: ObjExpr
+        props:
+          - type: ObjProp
+            key:
+              type: Number
+              value: '1'
+            value:
+              type: BinaryExpr
+              op: ==
+              left:
+                type: Id
+                value: x
+              right:
+                type: Number
+                value: '1'
+            computed: false
 `;
+parse(code, tree);
 
 // vararg
 code = raw`
@@ -1583,6 +1851,52 @@ body:
         body:
           - type: VarArg
     isLocal: false
+`;
+parse(code, tree);
+
+code = raw`
+local t = {x = 1, y, z = function () end, function () end}
+`;
+tree = raw`
+type: Chunk
+body:
+  - type: VarDecStmt
+    nameList:
+      - type: Id
+        value: t
+    exprList:
+      - type: ObjExpr
+        props:
+          - type: ObjProp
+            key:
+              type: Id
+              value: x
+            value:
+              type: Number
+              value: '1'
+            computed: false
+          - type: ObjProp
+            key:
+              type: Number
+              value: '1'
+            value:
+              type: Id
+              value: 'y'
+            computed: false
+          - type: ObjMethod
+            key:
+              type: Id
+              value: z
+            params: []
+            body: []
+            isLocal: true
+          - type: ObjMethod
+            key:
+              type: Number
+              value: '2'
+            params: []
+            body: []
+            isLocal: true
 `;
 parse(code, tree);
 
