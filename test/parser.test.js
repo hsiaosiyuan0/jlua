@@ -243,6 +243,41 @@ parse(code, tree);
 
 // assignments
 code = raw`
+local i,j; j = i*j+i
+`;
+tree = raw`
+type: Chunk
+body:
+  - type: VarDecStmt
+    nameList:
+      - type: Id
+        value: i
+      - type: Id
+        value: j
+    exprList: []
+  - type: AssignStmt
+    left:
+      - type: Id
+        value: j
+    right:
+      - type: BinaryExpr
+        op: +
+        left:
+          type: BinaryExpr
+          op: '*'
+          left:
+            type: Id
+            value: i
+          right:
+            type: Id
+            value: j
+        right:
+          type: Id
+          value: i
+`;
+parse(code, tree);
+
+code = raw`
 a = f()[1]
 `;
 tree=raw`

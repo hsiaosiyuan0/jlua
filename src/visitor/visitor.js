@@ -1,4 +1,4 @@
-import { FunctionDecExpr, NodeType } from "../parser";
+import { NodeType } from "../parser";
 
 export class AstVisitor {
   visitChunk(node) {}
