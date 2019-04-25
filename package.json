@@ -31,5 +31,7 @@
     "webpack": "^4.30.0",
     "webpack-cli": "^3.3.0"
   },
-  "dependencies": {}
+  "dependencies": {
+    "long": "^4.0.0"
+  }
 }
