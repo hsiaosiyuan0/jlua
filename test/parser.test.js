@@ -680,6 +680,34 @@ body:
 `;
 parse(code, tree);
 
+code = raw`
+c = (a .. b .. c)
+`;
+tree = raw`
+type: Chunk
+body:
+  - type: AssignStmt
+    left:
+      - type: Id
+        value: c
+    right:
+      - type: BinaryExpr
+        op: ..
+        left:
+          type: Id
+          value: a
+        right:
+          type: BinaryExpr
+          op: ..
+          left:
+            type: Id
+            value: b
+          right:
+            type: Id
+            value: c
+`;
+parse(code, tree);
+
 // empty files
 code = raw`
 ;
