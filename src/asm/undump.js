@@ -50,7 +50,7 @@ export class Undumper {
     assert.ok(header.luacData.equals(kLuacData), "mismatch luac_data");
 
     header.intSize = this.buf.readUInt8();
-    let ok = header.intSize === 4 || header.intSize === 8;
+    let ok = header.intSize === 4;
     assert.ok(ok, "unsupported int_size");
 
     header.sizetSize = this.buf.readUInt8();
@@ -132,7 +132,7 @@ export class Undumper {
     const code = [];
     const n = this.loadInt();
     loop(() => {
-      code.push(new LuaInstruction(this.buf.forward(this.header.instSize)));
+      code.push(new LuaInstruction(this.loadInt()));
     }, n);
     return code;
   }

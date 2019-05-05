@@ -1,4 +1,5 @@
 import long from "long";
+import * as os from "os";
 
 export const kLuaMaxShortStrLen = 40;
 
@@ -13,7 +14,7 @@ export class LuaConstant {}
 export class LuaString extends LuaConstant {
   /**
    *
-   * @param size {number}
+   * @param size {!Long}
    * @param raw {Buffer}
    */
   constructor(size, raw) {
@@ -104,7 +105,7 @@ export class LuaFunction {
 export class LuaInstruction {
   /**
    *
-   * @param raw {Buffer}
+   * @param raw {number}
    */
   constructor(raw) {
     this.raw = raw;
@@ -127,6 +128,40 @@ export class ChunkHeader {
   /** @type number  */
   luacNum = 0;
 }
+
+const archWordSize = arch => {
+  switch (arch) {
+    case "arm":
+    case "ia32":
+    case "mips":
+    case "mipsel":
+    case "ppc":
+    case "s390":
+    case "x32":
+      return 32;
+    case "arm64":
+    case "ppc64":
+    case "s390x":
+    case "x64":
+      return 64;
+    default:
+      throw new Error("unknown arch: " + arch);
+  }
+};
+
+const DefaultChunkHeader = new ChunkHeader();
+DefaultChunkHeader.sig = Buffer.from("1b4c7561", "hex");
+DefaultChunkHeader.version = 53;
+DefaultChunkHeader.format = 0;
+DefaultChunkHeader.luacData = kLuacData;
+DefaultChunkHeader.intSize = archWordSize(os.arch()) === 32 ? 4 : 8;
+DefaultChunkHeader.sizetSize = DefaultChunkHeader.intSize;
+DefaultChunkHeader.instSize = 4;
+DefaultChunkHeader.luaIntSize = DefaultChunkHeader.intSize;
+DefaultChunkHeader.luaNumSize = 8;
+DefaultChunkHeader.luacInt = kLuacInt;
+DefaultChunkHeader.luacNum = kLuacNum;
+ChunkHeader.default = DefaultChunkHeader;
 
 export class Chunk {
   header = new ChunkHeader();

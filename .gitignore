@@ -8,3 +8,5 @@ dist
 node_modules
 
 src/_testrun.js
+/test.lua
+/luac.out
