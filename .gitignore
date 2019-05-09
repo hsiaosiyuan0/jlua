@@ -10,3 +10,5 @@ node_modules
 src/_testrun.js
 /test.lua
 /luac.out
+/code.luac
+/ChunkSpy53.lua

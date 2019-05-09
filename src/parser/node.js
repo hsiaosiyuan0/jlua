@@ -37,6 +37,7 @@ export class NodeType {
 }
 
 export class Node {
+  /** @type {string} */
   type = NodeType.Error;
   loc = new SourceLoc();
 }

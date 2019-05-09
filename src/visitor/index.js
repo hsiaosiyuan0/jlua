@@ -1,2 +1,2 @@
 export * from "./visitor";
-export * from "./dump";
+export * from "./yaml";

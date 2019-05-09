@@ -5,6 +5,7 @@ import {
   kSizeofUInt64,
   kSizeofUInt8
 } from "./size";
+import long from "long";
 
 export class BufferWriter {
   constructor(cap = 512) {
@@ -90,21 +91,25 @@ export class BufferWriter {
   }
 
   writeInt16(n) {
+    this.guard(kSizeofUInt16);
     if (this.endian === "BE") this.writeInt16BE(n);
     else this.writeInt16LE(n);
   }
 
   writeInt32(n) {
+    this.guard(kSizeofUInt32);
     if (this.endian === "BE") this.writeInt32BE(n);
     else this.writeInt32LE(n);
   }
 
   writeUInt16(n) {
+    this.guard(kSizeofUInt16);
     if (this.endian === "BE") this.writeUInt16BE(n);
     else this.writeUInt16LE(n);
   }
 
   writeUInt32(n) {
+    this.guard(kSizeofUInt32);
     if (this.endian === "BE") this.writeUInt32BE(n);
     else this.writeUInt32LE(n);
   }
@@ -114,11 +119,14 @@ export class BufferWriter {
    * @param n {!Long}
    */
   writeUInt64(n) {
+    this.guard(kSizeofUInt64);
     n = n.toUnsigned();
     this.writeInt64(n);
   }
 
   writeInt64(n) {
+    this.guard(kSizeofUInt64);
+    n = long.isLong(n) ? n : long.fromNumber(n);
     this.guard(kSizeofUInt64);
     const bs = this.endian === "BE" ? n.toBytesBE() : n.toBytesLE();
     for (let i = 0; i < kSizeofUInt64; i++) this.writeUInt8(bs[i]);
@@ -126,17 +134,20 @@ export class BufferWriter {
 
   writeDoubleBE(n) {
     this.guard(kSizeofUInt64);
+    this.guard(kSizeofUInt64);
     this.wb.writeDoubleBE(n, this.len);
     this.len += kSizeofUInt64;
   }
 
   writeDoubleLE(n) {
     this.guard(kSizeofUInt64);
+    this.guard(kSizeofUInt64);
     this.wb.writeDoubleLE(n, this.len);
     this.len += kSizeofUInt64;
   }
 
   writeDouble(n) {
+    this.guard(kSizeofUInt64);
     if (this.endian === "BE") this.writeDoubleBE(n);
     else this.writeDoubleLE(n);
   }

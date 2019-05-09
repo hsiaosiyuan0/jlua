@@ -146,10 +146,10 @@ export class Dumper {
       } else if (c instanceof LuaNumber) {
         if (c.isInt) {
           this.writeByte(LuaType.NumInt);
-          this.writeLuaInt(c.raw);
+          this.wb.write(c.raw);
         } else {
           this.writeByte(LuaType.NumFlt);
-          this.writeLuaNum(c.raw);
+          this.wb.write(c.raw);
         }
       } else if (c instanceof LuaString) {
         if (c.size <= kLuaMaxShortStrLen) this.writeByte(LuaType.StrShr);

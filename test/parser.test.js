@@ -1,5 +1,5 @@
 import { Lexer, Source, Parser } from "../src";
-import { DumpVisitor } from "../src/visitor";
+import { YamlVisitor } from "../src/visitor";
 import * as yaml from "js-yaml";
 
 const raw = String.raw;
@@ -9,7 +9,7 @@ function parse(code, tree) {
   const lexer = new Lexer(src);
   const parser = new Parser(lexer);
   const node = parser.parseChunk();
-  const v = new DumpVisitor();
+  const v = new YamlVisitor();
   const out = v.visitChunk(node);
   test(code, () => {
     expect(yaml.dump(out).trim()).toBe(tree.trim());
