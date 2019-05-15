@@ -180,7 +180,7 @@ export class LuaInstruction {
   }
 
   get B() {
-    return (this.raw >> 14) & 0x3ffff;
+    return (this.raw >> 23) & 0x1ff;
   }
 
   get C() {

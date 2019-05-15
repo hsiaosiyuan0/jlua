@@ -25,7 +25,7 @@ export class FnState extends LuaFunction {
     this.upvalueIdx = 0;
     this._nextReg = 0;
     this._freeRegs = [];
-    this.set2reg = -1;
+    this._set2reg = [];
     this._retNum = [];
   }
 
@@ -52,6 +52,13 @@ export class FnState extends LuaFunction {
   }
 
   get usableReg() {
+    // TODO:: divides temp and local registers, collect the useless tmp registers for later reuse
+    // in some situations we can not use free regs since those situations requires
+    // the involved registers muse be sequential, eg. `CALL` requires the registers used
+    // by it's arguments are sequential and closely flow the `RA` part in `CALL` instruction.
+    // to resolve the problem shown by prior `CALL` example, we can introduce a scope
+    // notion which can indicate the expressions in it cannot use free register otherwise
+    // it's fine to use the free ones
     if (this._freeRegs.length > 0) return this._freeRegs.pop();
     return this.nextReg;
   }
@@ -132,19 +139,58 @@ export class FnState extends LuaFunction {
   pushRetNum(n) {
     this._retNum.push(n);
   }
+
   setRetNum(n) {
     this._retNum[this._retNum.length - 1] = n;
   }
+
   getRetNum() {
-    return this._retNum[this._retNum.length - 1];
+    const n = this._retNum[this._retNum.length - 1];
+    return n === undefined ? 0 : n;
   }
+
   popRetNum() {
     this._retNum.pop();
+  }
+
+  pushSet2reg(r) {
+    this._set2reg.push(r);
+  }
+
+  get set2reg() {
+    const r = this._set2reg[this._set2reg.length - 1];
+    return r === undefined ? -1 : r;
+  }
+
+  popSet2reg() {
+    this._set2reg.pop();
   }
 }
 
 export const kBitRK = 1 << 8;
 export const kstIdxToRK = i => i | kBitRK;
+
+export const binop2opcode = {
+  "+": OpCode.ADD,
+  "-": OpCode.SUB,
+  "*": OpCode.MUL,
+  "/": OpCode.DIV,
+  "%": OpCode.MOD,
+  "^": OpCode.POW,
+  "==": OpCode.EQ,
+  "<": OpCode.LT,
+  "<=": OpCode.LE,
+  "~=": OpCode.EQ,
+  ">": OpCode.LT,
+  ">=": OpCode.LE,
+  "..": OpCode.CONCAT
+};
+
+export const unaryop2opcode = {
+  "-": OpCode.UNM,
+  not: OpCode.NOT,
+  "#": OpCode.LEN
+};
 
 export class Codegen extends AstVisitor {
   /** @type {FnState}  */
@@ -198,9 +244,9 @@ export class Codegen extends AstVisitor {
           this.fnState.pushRetNum(excessNamesLen);
         } else this.fnState.pushRetNum(1);
 
-        this.fnState.set2reg = set2reg;
+        this.fnState.pushSet2reg(set2reg);
         this.visitExpr(exprList[i]);
-        this.fnState.set2reg = -1;
+        this.fnState.popSet2reg();
         this.fnState.popRetNum();
 
         // if last expr can return multiple results then use the returned register directly
@@ -250,10 +296,12 @@ export class Codegen extends AstVisitor {
     for (let i = 0; i < leftLen; i++) {
       const name = left[i].name;
       if (this.fnState.hasLocal(name)) {
-        this.fnState.set2reg = this.fnState.local2reg(name);
+        this.fnState.pushSet2reg(this.fnState.local2reg(name));
       } else {
         const foundUpvalue = this.fnState.addUpvalue(name);
-        this.fnState.set2reg = lastCallReg > 0 ? lastCallReg++ : this.set2reg;
+        this.fnState.pushSet2reg(
+          lastCallReg > 0 ? lastCallReg++ : this.set2reg
+        );
 
         if (foundUpvalue) {
           // for emit `SETUPVAL` later
@@ -280,7 +328,7 @@ export class Codegen extends AstVisitor {
       // if `lastExprCanRetMulti` is true then next expression are all
       // dummy `NilLiteral`
       if (!lastExprCanRetMulti) this.visitExpr(right[i]);
-      this.fnState.set2reg = -1;
+      this.fnState.popSet2reg();
       this.fnState.popRetNum();
     }
 
@@ -300,6 +348,47 @@ export class Codegen extends AstVisitor {
       inst.C = gb[1];
       this.fnState.appendInst(inst);
     });
+  }
+
+  visitIfStmt(node) {
+    const set2reg = this.fnState.usableReg;
+    this.fnState.pushSet2reg(set2reg);
+    this.fnState.pushRetNum(1);
+    this.visitExpr(node.test);
+    this.fnState.popRetNum();
+    this.fnState.popSet2reg();
+
+    const test = new LuaInstruction();
+    test.opcode = OpCode.TEST;
+    test.A = set2reg;
+    test.C = 0;
+    this.fnState.appendInst(test);
+
+    const elseJump = new LuaInstruction();
+    elseJump.opcode = OpCode.JMP;
+    elseJump.A = 0;
+    this.fnState.appendInst(elseJump);
+    elseJump.sBx = this.fnState.code.length;
+
+    node.consequent.forEach(stmt => this.visitStmt(stmt));
+    const jmp = new LuaInstruction();
+    jmp.opcode = OpCode.JMP;
+    this.fnState.appendInst(jmp);
+    jmp.sBx = this.fnState.code.length;
+
+    // fix else-jump to jump to the beginning of the else branch
+    elseJump.sBx = this.fnState.code.length - elseJump.sBx;
+
+    if (node.alternate) {
+      this.visitStmt(node.alternate);
+    }
+
+    // fix jmp to skip code of else branch
+    jmp.sBx = this.fnState.code.length - jmp.sBx;
+  }
+
+  visitBlockStmt(node) {
+    node.body.forEach(stmt => this.visitStmt(stmt));
   }
 
   visitCallStmt(node) {
@@ -323,10 +412,10 @@ export class Codegen extends AstVisitor {
     const firstRetReg = this.fnState.nextReg;
     let i = firstRetReg;
     node.body.forEach(expr => {
-      this.fnState.set2reg = i++;
+      this.fnState.pushSet2reg(i++);
       this.visitExpr(expr);
     });
-    this.fnState.set2reg = -1;
+    this.fnState.popSet2reg();
     const ret = new LuaInstruction();
     ret.opcode = OpCode.RETURN;
     ret.A = firstRetReg;
@@ -388,10 +477,12 @@ export class Codegen extends AstVisitor {
   visitCallExpr(node) {
     const inst = new LuaInstruction();
     inst.opcode = OpCode.CALL;
-    if (this.fnState.set2reg === -1)
-      this.fnState.set2reg = this.fnState.nextReg;
-    inst.A = this.fnState.set2reg;
+    const callRet = this.set2reg;
+    inst.A = callRet;
+    this.fnState.pushSet2reg(callRet);
     this.visitExpr(node.callee);
+    this.fnState.popSet2reg();
+
     const len = node.args.length;
     const lastIsMultiRet =
       len > 0 && node.args[len - 1].type === NodeType.CallExpression;
@@ -399,16 +490,16 @@ export class Codegen extends AstVisitor {
       inst.B = 1;
     } else {
       node.args.forEach((expr, i) => {
-        this.fnState.set2reg = this.fnState.nextReg;
+        this.fnState.pushSet2reg(this.fnState.nextReg);
         if (lastIsMultiRet && i === len - 1) {
           this.fnState.pushRetNum(-1);
         } else {
           this.fnState.pushRetNum(1);
         }
         this.visitExpr(expr);
+        this.fnState.popSet2reg();
         this.fnState.popRetNum();
       });
-      this.fnState.set2reg = -1;
       if (lastIsMultiRet) inst.B = 0;
       else inst.B = len + 1;
     }
@@ -423,6 +514,122 @@ export class Codegen extends AstVisitor {
       this.fnState.setNextReg(inst.A + retNum);
     }
     this.fnState.appendInst(inst);
+  }
+
+  visitBinaryExpr(node) {
+    const inst = new LuaInstruction();
+    inst.opcode = binop2opcode[node.operator];
+    const isCmp =
+      ["==", "<", "<=", ">", ">=", "~="].indexOf(node.operator) !== -1;
+    const isLogic = !isCmp && ["and", "or"].indexOf(node.operator) !== -1;
+    if (isCmp) {
+      inst.A = 1;
+      if (["~=", ">", ">="].indexOf(node.operator) !== -1) {
+        inst.A = 0;
+      }
+    } else {
+      inst.A = this.set2reg;
+    }
+    const isRK = ["..", "and", "or"].indexOf(node.operator) === -1;
+    const addConst = c => {
+      if (c.type === NodeType.NumericLiteral) {
+        c = LuaNumber.fromNumber(c.value);
+      } else if (c.type === NodeType.StringLiteral) {
+        c = LuaString.fromString(c.value);
+      }
+      this.fnState.addConst(c);
+      return kstIdxToRK(this.fnState.const2idx(c));
+    };
+    const lhs = node.left;
+    const rhs = node.right;
+    if (
+      isRK &&
+      (lhs.type === NodeType.NumericLiteral ||
+        lhs.type === NodeType.StringLiteral)
+    ) {
+      inst.B = addConst(lhs);
+    } else {
+      this.fnState.pushSet2reg(this.fnState.usableReg);
+      this.visitExpr(lhs);
+      inst.B = this.fnState.set2reg;
+      this.fnState.popSet2reg();
+    }
+    if (
+      isRK &&
+      (rhs.type === NodeType.NumericLiteral ||
+        rhs.type === NodeType.StringLiteral)
+    ) {
+      inst.C = addConst(rhs);
+    } else {
+      this.fnState.pushSet2reg(this.fnState.usableReg);
+      this.visitExpr(rhs);
+      inst.C = this.fnState.set2reg;
+      this.fnState.popSet2reg();
+    }
+    this.fnState.appendInst(inst);
+
+    if (isCmp && this.fnState.getRetNum() === 1) {
+      const jmp = new LuaInstruction();
+      jmp.opcode = OpCode.JMP;
+      jmp.A = 0;
+      jmp.sBx = 1;
+      this.fnState.appendInst(jmp);
+
+      const tv = new LuaInstruction();
+      tv.opcode = OpCode.LOADBOO;
+      tv.A = this.set2reg;
+      tv.B = 0;
+      tv.C = 1;
+      this.fnState.appendInst(tv);
+
+      const fv = new LuaInstruction();
+      fv.opcode = OpCode.LOADBOO;
+      fv.A = this.set2reg;
+      fv.B = 1;
+      fv.C = 0;
+      this.fnState.appendInst(fv);
+    }
+
+    if (isLogic && this.fnState.getRetNum() === 1) {
+      const set2reg = this.set2reg;
+      const ts = new LuaInstruction();
+      ts.opcode = OpCode.TESTSET;
+      ts.A = set2reg;
+      ts.B = inst.B;
+      ts.C = node.operator === "and" ? 0 : 1;
+      this.fnState.appendInst(ts);
+
+      const jmp = new LuaInstruction();
+      jmp.opcode = OpCode.JMP;
+      jmp.A = 0;
+      jmp.sBx = 1;
+      this.fnState.appendInst(jmp);
+
+      const move = new LuaInstruction();
+      move.opcode = OpCode.MOVE;
+      move.A = set2reg;
+      move.B = inst.C;
+      this.fnState.appendInst(move);
+    }
+  }
+
+  visitUnaryExpr(node) {
+    switch (node.operator) {
+      case "-":
+      case "not":
+      case "#": {
+        const inst = new LuaInstruction();
+        inst.opcode = unaryop2opcode[node.operator];
+        inst.A = this.set2reg;
+        const set2reg = this.fnState.nextReg;
+        this.fnState.pushSet2reg(set2reg);
+        this.visitExpr(node.argument);
+        this.fnState.popSet2reg();
+        inst.B = set2reg;
+        this.fnState.appendInst(inst);
+        break;
+      }
+    }
   }
 
   visitStringLiteral(node) {
