@@ -119,7 +119,7 @@ export class FnState extends LuaFunction {
         this.upvalues.push(v);
         break;
       }
-      spans.push(parent);
+      if (parent.parent !== null) spans.push(parent);
       parent = parent.parent;
       depth++;
     }
@@ -223,6 +223,7 @@ export class Codegen extends AstVisitor {
     ret.opcode = OpCode.RETURN;
     ret.A = 0;
     ret.B = 1;
+    this.fnState.isVararg = 1;
     this.fnState.appendInst(ret);
     return this.fnState;
   }
@@ -294,7 +295,7 @@ export class Codegen extends AstVisitor {
     const right = node.right.expressions;
     const leftLen = left.length;
     const rightLen = right.length;
-    const excessLeftLen = leftLen - rightLen;
+    const excessLeftLen = rightLen > 1 ? leftLen - rightLen : leftLen;
     const lastExprIdx = rightLen - 1;
     const lastExpr = right[lastExprIdx];
     const lastExprCanRetMulti =
@@ -316,7 +317,7 @@ export class Codegen extends AstVisitor {
       } else {
         const foundUpvalue = this.fnState.addUpvalue(name);
         this.fnState.pushSet2reg(
-          lastCallReg > 0 ? lastCallReg++ : this.set2reg
+          lastCallReg > 0 ? ++lastCallReg : this.set2reg
         );
 
         if (foundUpvalue) {
@@ -341,9 +342,7 @@ export class Codegen extends AstVisitor {
         this.fnState.pushRetNum(excessLeftLen);
       } else this.fnState.pushRetNum(1);
 
-      // if `lastExprCanRetMulti` is true then next expression are all
-      // dummy `NilLiteral`
-      this.visitExpr(right[i]);
+      if (right[i]) this.visitExpr(right[i]);
       this.fnState.popSet2reg();
       this.fnState.popRetNum();
     }
@@ -567,6 +566,7 @@ export class Codegen extends AstVisitor {
         this.fnState.appendInst(sl);
       }
     } else {
+      const r = nt.A + 1;
       ps.forEach(p => {
         const sl = new LuaInstruction();
         sl.opcode = OpCode.SETTABLE;
@@ -575,8 +575,6 @@ export class Codegen extends AstVisitor {
         const c = LuaString.fromString(p.key.name);
         this.fnState.addConst(c);
         sl.B = kstIdxToRK(this.fnState.const2idx(c));
-
-        const r = this.fnState.nextReg;
         sl.C = r;
 
         this.fnState.pushSet2reg(r);
@@ -594,7 +592,7 @@ export class Codegen extends AstVisitor {
         this.fnState.appendInst(sl);
       });
     }
-    this.fnState.setNextReg(nt.A);
+    this.fnState.setNextReg(nt.A + 1);
   }
 
   visitBlockStmt(node) {
@@ -616,6 +614,25 @@ export class Codegen extends AstVisitor {
   visitReturnStmt(node) {
     const pLen = node.body.length;
     const lastExpr = node.body[pLen - 1];
+
+    if (pLen === 1 && lastExpr.type === NodeType.CallExpression) {
+      const set2reg = this.fnState.nextReg;
+      this.fnState.pushSet2reg(set2reg);
+      this.visitExpr(lastExpr);
+      this.fnState.popSet2reg();
+      const tc = this.fnState.code[this.fnState.code.length - 1];
+      tc.opcode = OpCode.TAILCALL;
+      tc.A = set2reg;
+      tc.C = 0;
+
+      const ret = new LuaInstruction();
+      ret.opcode = OpCode.RETURN;
+      ret.A = set2reg;
+      ret.B = 0;
+      this.fnState.appendInst(ret);
+      return;
+    }
+
     const lastIsCallOrVarArg =
       lastExpr.type === NodeType.CallExpression ||
       lastExpr.type === NodeType.VarArgExpression;
@@ -628,8 +645,8 @@ export class Codegen extends AstVisitor {
     node.body.forEach(expr => {
       this.fnState.pushSet2reg(i++);
       this.visitExpr(expr);
+      this.fnState.popSet2reg();
     });
-    this.fnState.popSet2reg();
     const ret = new LuaInstruction();
     ret.opcode = OpCode.RETURN;
     ret.A = firstRetReg;
@@ -665,6 +682,7 @@ export class Codegen extends AstVisitor {
   }
 
   visitFuncDecParams(params) {
+    this.fnState.paramCnt = params.length;
     params.forEach(p => {
       if (p.type === NodeType.Identifier) this.fnState.defLocal(p.name);
       else if (p.type === NodeType.VarArgExpression) this.fnState.isVararg = 1;
@@ -799,9 +817,11 @@ export class Codegen extends AstVisitor {
       inst.B = addConst(lhs);
     } else {
       this.fnState.pushSet2reg(this.fnState.usableReg);
+      this.fnState.pushRetNum(1);
       this.visitExpr(lhs);
       inst.B = this.fnState.set2reg;
       this.fnState.popSet2reg();
+      this.fnState.popRetNum();
     }
     if (
       isRK &&
@@ -811,9 +831,11 @@ export class Codegen extends AstVisitor {
       inst.C = addConst(rhs);
     } else {
       this.fnState.pushSet2reg(this.fnState.usableReg);
+      this.fnState.pushRetNum(1);
       this.visitExpr(rhs);
       inst.C = this.fnState.set2reg;
       this.fnState.popSet2reg();
+      this.fnState.popRetNum();
     }
     this.fnState.appendInst(inst);
 

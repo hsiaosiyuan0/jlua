@@ -48,7 +48,6 @@ export class LuaString extends LuaConstant {
   static fromString(s) {
     const raw = Buffer.from(s, "utf8");
     let len = raw.length + 1;
-    len = len <= kLuaMaxShortStrLen ? len : len - 1;
     return new LuaString(long.fromNumber(len), raw);
   }
 

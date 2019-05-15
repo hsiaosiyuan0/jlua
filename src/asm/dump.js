@@ -67,12 +67,13 @@ export class Dumper {
       this.wb.writeUInt8(s.size.toNumber());
     } else {
       this.wb.writeUInt8(0xff);
-      this.wb.writeSizet(s.size);
+      this.writeSizet(s.size);
     }
     this.wb.write(s.raw);
   }
 
   process() {
+    this.wb = new BufferWriter();
     this.writeHeader();
     this.writeByte(this.chunk.topFn.upvalues.length);
     this.writeFunction(this.chunk.topFn);
@@ -154,7 +155,6 @@ export class Dumper {
       } else if (c instanceof LuaString) {
         if (c.size <= kLuaMaxShortStrLen) this.writeByte(LuaType.StrShr);
         else this.writeByte(LuaType.StrLng);
-
         this.writeLuaString(c);
       } else {
         throw new Error("unsupported lua type: " + c);

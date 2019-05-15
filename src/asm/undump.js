@@ -101,9 +101,7 @@ export class Undumper {
     if (size === 0xff) size = this.loadSizet();
     const str = new LuaString(size, null);
     if (size.eq(0)) return str;
-    else if (size.le(kLuaMaxShortStrLen))
-      str.raw = this.buf.forward(size.sub(1));
-    else str.raw = this.buf.forward(size);
+    str.raw = this.buf.forward(size.sub(1));
     return str;
   }
 
