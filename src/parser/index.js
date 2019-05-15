@@ -516,6 +516,7 @@ export class Parser {
         this.nextMustBeSign(Sign.Assign);
         value = this.parseExp();
         computed = true;
+        node.isArray = false;
       } else {
         key = this.parseExp();
         if (key === null) this.raiseUnexpectedTokErr("expr");
@@ -525,6 +526,7 @@ export class Parser {
             this.raiseUnexpectedTokErr("identifier");
           this.lexer.next();
           value = this.parseExp();
+          node.isArray = false;
         } else {
           value = key;
           key = new NumericLiteral();

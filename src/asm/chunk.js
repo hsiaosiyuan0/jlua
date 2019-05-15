@@ -220,6 +220,26 @@ export class LuaInstruction {
     sbx += 131071;
     this.raw = (this.raw & ~(0x3ffff << 14)) | (sbx << 14);
   }
+
+  static int2fb(x) {
+    let e = 0; /* exponent */
+    if (x < 8) return x;
+    while (x >= 8 << 4) {
+      /* coarse steps */
+      x = (x + 0xf) >> 4; /* x = ceil(x / 16) */
+      e += 4;
+    }
+    while (x >= 8 << 1) {
+      /* fine steps */
+      x = (x + 1) >> 1; /* x = ceil(x / 2) */
+      e++;
+    }
+    return ((e + 1) << 3) | (x - 8);
+  }
+
+  static fb2int(x) {
+    return x < 8 ? x : ((x & 7) + 8) << ((x >> 3) - 1);
+  }
 }
 
 export class ChunkHeader {

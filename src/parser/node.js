@@ -149,6 +149,7 @@ export class ObjectExpression extends Expression {
   type = NodeType.ObjectExpression;
   /** @type Array<ObjectProperty|ObjectMethod> */
   properties = [];
+  isArray = true;
 }
 
 export class ObjectMember extends Node {

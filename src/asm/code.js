@@ -10,10 +10,11 @@ import {
 } from "./chunk";
 import assert from "assert";
 import {
-  CallExpression,
+  FunctionDecExpr,
   NilLiteral,
   NodeType,
-  NumericLiteral
+  NumericLiteral,
+  ObjectProperty
 } from "../parser";
 
 export class FnState extends LuaFunction {
@@ -49,10 +50,12 @@ export class FnState extends LuaFunction {
   }
 
   get nextReg() {
+    this.maxStackSize = Math.max(this.maxStackSize, this._nextReg + 1);
     return this._nextReg++;
   }
 
   setNextReg(n) {
+    this.maxStackSize = Math.max(this.maxStackSize, n);
     this._nextReg = n;
     this._freeRegs = this._freeRegs.filter(r => r < n);
   }
@@ -166,6 +169,7 @@ export class FnState extends LuaFunction {
   }
 
   pushSet2reg(r) {
+    this.maxStackSize = Math.max(this.maxStackSize, r);
     this._set2reg.push(r);
   }
 
@@ -332,14 +336,14 @@ export class Codegen extends AstVisitor {
         }
       }
 
-      if (i === lastExprIdx && lastExprCanRetMulti) {
+      if (i === lastExprIdx && lastExprCanRetMulti && excessLeftLen) {
         lastCallReg = this.fnState.set2reg;
         this.fnState.pushRetNum(excessLeftLen);
       } else this.fnState.pushRetNum(1);
 
       // if `lastExprCanRetMulti` is true then next expression are all
       // dummy `NilLiteral`
-      if (!lastExprCanRetMulti) this.visitExpr(right[i]);
+      this.visitExpr(right[i]);
       this.fnState.popSet2reg();
       this.fnState.popRetNum();
     }
@@ -446,6 +450,153 @@ export class Codegen extends AstVisitor {
     this.fnState.setNextReg(a);
   }
 
+  visitForInStmt(node) {
+    const rItFn = this.fnState.nextReg;
+    const rState = rItFn + 1;
+    const rCtrl = rState + 1;
+    const ri = rCtrl + 1;
+    const rv = ri + 1;
+
+    const nameList = node.nameList;
+    const nameListLen = nameList.length;
+    if (nameListLen > 2) throw new Error("deformed iterator lhs");
+    if (nameList[0] !== undefined) this.fnState.defLocal(nameList[0].name, ri);
+    if (nameList[1] !== undefined) this.fnState.defLocal(nameList[1].name, rv);
+
+    const exprList = node.exprList;
+    const exprListLen = exprList.length;
+    const itFnNode = exprList[0];
+    if (exprListLen === 1 && itFnNode.type === NodeType.CallExpression) {
+      this.fnState.pushSet2reg(rItFn);
+      this.fnState.pushRetNum(3);
+      this.visitExpr(exprList[0]);
+      this.fnState.popSet2reg();
+      this.fnState.popRetNum();
+    } else if (exprListLen === 3) {
+      this.fnState.pushSet2reg(rItFn);
+      this.visitExpr(exprList[0]);
+      this.fnState.popSet2reg();
+
+      this.fnState.pushSet2reg(rState);
+      this.visitExpr(exprList[1]);
+      this.fnState.popSet2reg();
+
+      this.fnState.pushSet2reg(rCtrl);
+      this.visitExpr(exprList[2]);
+      this.fnState.pushSet2reg();
+    } else {
+      throw new Error("deformed iterator rhs");
+    }
+
+    const jmp = new LuaInstruction();
+    jmp.opcode = OpCode.JMP;
+    jmp.A = 0;
+    this.fnState.appendInst(jmp);
+    jmp.sBx = this.fnState.code.length;
+
+    this.fnState.setNextReg(rv + 1);
+    node.body.forEach(stmt => this.visitStmt(stmt));
+    jmp.sBx = this.fnState.code.length - jmp.sBx;
+
+    const forcall = new LuaInstruction();
+    forcall.opcode = OpCode.TFORCALL;
+    forcall.A = rItFn;
+    forcall.C = nameListLen;
+    this.fnState.appendInst(forcall);
+
+    const forloop = new LuaInstruction();
+    forloop.opcode = OpCode.FORLOOP;
+    forloop.A = rCtrl;
+    this.fnState.appendInst(forloop);
+    forloop.sBx = -(jmp.sBx + 2);
+
+    this.fnState.removeLocal(nameList[0].name);
+    if (nameList[1]) this.fnState.removeLocal(nameList[1].name);
+    // free registers used by forloop
+    this.fnState.setNextReg(rItFn);
+  }
+
+  visitObjectExpression(node) {
+    const ps = node.properties;
+    const psLen = ps.length;
+    const nt = new LuaInstruction();
+    nt.opcode = OpCode.NEWTABLE;
+    nt.A = this.set2reg;
+    if (node.isArray) nt.B = LuaInstruction.int2fb(psLen);
+    else nt.C = LuaInstruction.int2fb(psLen);
+    this.fnState.appendInst(nt);
+
+    if (node.isArray) {
+      const FPF = 50;
+      let lastIsCallOrVarArg = false;
+      for (let i = 0, r = nt.A + 1; i < psLen; i++, r++) {
+        this.fnState.pushSet2reg(r);
+        const expr = ps[i].value;
+        if (
+          i === psLen - 1 &&
+          (expr.type === NodeType.CallExpression ||
+            expr.type === NodeType.VarArgExpression)
+        ) {
+          this.fnState.pushRetNum(-1);
+          this.visitExpr(expr);
+          this.fnState.popRetNum();
+          lastIsCallOrVarArg = true;
+        } else {
+          this.visitExpr(expr);
+        }
+        this.fnState.popSet2reg();
+        if (i !== 0 && (i + 1) % FPF === 0) {
+          const sl = new LuaInstruction();
+          sl.opcode = OpCode.SETLIST;
+          sl.A = nt.A;
+          if (i === psLen - 1 && lastIsCallOrVarArg) sl.B = 0;
+          else sl.B = FPF;
+          sl.C = (i + 1) / FPF;
+          this.fnState.appendInst(sl);
+          r = nt.A;
+        }
+      }
+      const last = psLen % FPF;
+      if (last > 0) {
+        const sl = new LuaInstruction();
+        sl.opcode = OpCode.SETLIST;
+        sl.A = nt.A;
+        if (lastIsCallOrVarArg) sl.B = 0;
+        else sl.B = last;
+        sl.C = Math.ceil(psLen / FPF);
+        this.fnState.appendInst(sl);
+      }
+    } else {
+      ps.forEach(p => {
+        const sl = new LuaInstruction();
+        sl.opcode = OpCode.SETTABLE;
+        sl.A = nt.A;
+
+        const c = LuaString.fromString(p.key.name);
+        this.fnState.addConst(c);
+        sl.B = kstIdxToRK(this.fnState.const2idx(c));
+
+        const r = this.fnState.nextReg;
+        sl.C = r;
+
+        this.fnState.pushSet2reg(r);
+        if (p instanceof ObjectProperty) {
+          this.visitExpr(p.value);
+        } else {
+          const fn = new FunctionDecExpr();
+          fn.params = p.params;
+          fn.body = p.body;
+          fn.isLocal = true;
+          this.visitExpr(fn);
+        }
+        this.fnState.popSet2reg();
+
+        this.fnState.appendInst(sl);
+      });
+    }
+    this.fnState.setNextReg(nt.A);
+  }
+
   visitBlockStmt(node) {
     node.body.forEach(stmt => this.visitStmt(stmt));
   }
@@ -464,6 +615,10 @@ export class Codegen extends AstVisitor {
 
   visitReturnStmt(node) {
     const pLen = node.body.length;
+    const lastExpr = node.body[pLen - 1];
+    const lastIsCallOrVarArg =
+      lastExpr.type === NodeType.CallExpression ||
+      lastExpr.type === NodeType.VarArgExpression;
     if (pLen === 0) {
       this.appendDefaultRetInst();
       return;
@@ -478,7 +633,7 @@ export class Codegen extends AstVisitor {
     const ret = new LuaInstruction();
     ret.opcode = OpCode.RETURN;
     ret.A = firstRetReg;
-    ret.B = pLen + 1;
+    ret.B = lastIsCallOrVarArg ? 0 : pLen + 1;
     this.fnState.appendInst(ret);
   }
 
@@ -511,7 +666,8 @@ export class Codegen extends AstVisitor {
 
   visitFuncDecParams(params) {
     params.forEach(p => {
-      this.fnState.defLocal(p.name);
+      if (p.type === NodeType.Identifier) this.fnState.defLocal(p.name);
+      else if (p.type === NodeType.VarArgExpression) this.fnState.isVararg = 1;
     });
   }
 
@@ -533,6 +689,40 @@ export class Codegen extends AstVisitor {
     this.fnState.appendInst(instClosure);
   }
 
+  visitVarArgExpr(node) {
+    const inst = new LuaInstruction();
+    inst.opcode = OpCode.VARARG;
+    inst.A = this.set2reg;
+    const rn = this.fnState.getRetNum();
+    if (rn > 0) inst.B = rn + 1;
+    else inst.B = 0;
+    this.fnState.appendInst(inst);
+  }
+
+  visitMemberExpr(node) {
+    const gtbl = new LuaInstruction();
+    gtbl.opcode = OpCode.GETTABLE;
+    gtbl.A = this.set2reg;
+
+    const b = this.fnState.nextReg;
+    this.fnState.pushSet2reg(b);
+    this.visitExpr(node.object);
+    this.fnState.popSet2reg();
+    gtbl.B = b;
+
+    if (node.computed) {
+      const c = this.fnState.nextReg;
+      this.fnState.pushSet2reg(c);
+      this.visitExpr(node.property);
+      gtbl.C = c;
+    } else {
+      const c = LuaString.fromString(node.property.name);
+      this.fnState.addConst(c);
+      gtbl.C = kstIdxToRK(this.fnState.const2idx(c));
+    }
+    this.fnState.appendInst(gtbl);
+  }
+
   visitCallExpr(node) {
     const inst = new LuaInstruction();
     inst.opcode = OpCode.CALL;
@@ -549,7 +739,7 @@ export class Codegen extends AstVisitor {
       inst.B = 1;
     } else {
       node.args.forEach((expr, i) => {
-        this.fnState.pushSet2reg(this.fnState.nextReg);
+        this.fnState.pushSet2reg(callRet + i + 1);
         if (lastIsMultiRet && i === len - 1) {
           this.fnState.pushRetNum(-1);
         } else {
