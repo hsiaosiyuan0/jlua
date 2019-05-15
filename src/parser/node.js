@@ -220,11 +220,11 @@ export class RepeatStatement extends Statement {
 export class ForStatement extends Statement {
   type = NodeType.ForStatement;
   /** @type AssignExpression */
-  exp1 = null;
+  expr1 = null;
   /** @type Expression */
-  exp2 = null;
+  expr2 = null;
   /** @type Expression */
-  exp3 = null;
+  expr3 = null;
   /** @type Statement[] */
   body = [];
 }

@@ -9,7 +9,12 @@ import {
   OpCode
 } from "./chunk";
 import assert from "assert";
-import { CallExpression, NilLiteral, NodeType } from "../parser";
+import {
+  CallExpression,
+  NilLiteral,
+  NodeType,
+  NumericLiteral
+} from "../parser";
 
 export class FnState extends LuaFunction {
   /**
@@ -49,6 +54,7 @@ export class FnState extends LuaFunction {
 
   setNextReg(n) {
     this._nextReg = n;
+    this._freeRegs = this._freeRegs.filter(r => r < n);
   }
 
   get usableReg() {
@@ -71,6 +77,12 @@ export class FnState extends LuaFunction {
     const v = new LuaLocalVar(LuaString.fromString(name));
     v.reg = reg === -1 ? this.usableReg : reg;
     this.locals.push(v);
+  }
+
+  removeLocal(name) {
+    const reg = this.local2reg(name);
+    this.locals = this.locals.filter(v => !v.name.equals(name));
+    this.freeReg(reg);
   }
 
   local2reg(name) {
@@ -385,6 +397,53 @@ export class Codegen extends AstVisitor {
 
     // fix jmp to skip code of else branch
     jmp.sBx = this.fnState.code.length - jmp.sBx;
+  }
+
+  visitForStmt(node) {
+    const a = this.fnState.nextReg; // initial value
+    const a1 = this.fnState.nextReg; // limit
+    const a2 = this.fnState.nextReg; // stepping value
+    const a3 = this.fnState.nextReg; // local var
+
+    const localVar = node.expr1.left.expressions[0];
+    const initial = node.expr1.right.expressions[0];
+    this.fnState.pushSet2reg(a);
+    this.visitExpr(initial);
+    this.fnState.popSet2reg();
+
+    this.fnState.pushSet2reg(a1);
+    this.visitExpr(node.expr2);
+    this.fnState.popSet2reg();
+
+    let expr3 = node.expr3;
+    if (expr3 === null) {
+      expr3 = new NumericLiteral();
+      expr3.value = "1";
+    }
+    this.fnState.pushSet2reg(a2);
+    this.visitExpr(expr3);
+    this.fnState.popSet2reg();
+
+    this.fnState.defLocal(localVar.name, a3);
+
+    const forprep = new LuaInstruction();
+    forprep.opcode = OpCode.FORPREP;
+    forprep.A = a;
+    this.fnState.appendInst(forprep);
+    forprep.sBx = this.fnState.code.length;
+
+    node.body.forEach(stmt => this.visitStmt(stmt));
+    forprep.sBx = this.fnState.code.length - forprep.sBx;
+
+    const forloop = new LuaInstruction();
+    forloop.opcode = OpCode.FORLOOP;
+    forloop.A = a;
+    forloop.sBx = -(forprep.sBx + 1);
+    this.fnState.appendInst(forloop);
+
+    this.fnState.removeLocal(localVar.name);
+    // free registers used by forloop
+    this.fnState.setNextReg(a);
   }
 
   visitBlockStmt(node) {

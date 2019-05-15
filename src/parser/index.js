@@ -248,9 +248,9 @@ export class Parser {
     }
     this.nextMustBeKeyword(Keyword.Do);
     const node = new ForStatement();
-    node.exp1 = exp1;
-    node.exp2 = exp23[0];
-    node.exp3 = exp23[1];
+    node.expr1 = exp1;
+    node.expr2 = exp23[0];
+    node.expr3 = exp23[1];
     node.body = this.parseStmts(Keyword.End);
     return node;
   }
