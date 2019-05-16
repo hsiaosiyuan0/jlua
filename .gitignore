@@ -13,3 +13,4 @@ src/_testrun.js
 /code.luac
 /ChunkSpy53.lua
 *.swp
+*.swo
