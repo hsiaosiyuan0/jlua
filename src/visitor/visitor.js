@@ -59,6 +59,7 @@ export class AstVisitor {
   visitObjectMember(node) {}
   visitObjectProperty(node) {}
   visitObjectMethod(node) {}
+  visitParenthesizedExpr(node) {}
 
   visitStmt(node) {
     switch (node.type) {
@@ -123,6 +124,8 @@ export class AstVisitor {
         return this.visitFunctionDecExpr(node);
       case NodeType.ObjectExpression:
         return this.visitObjectExpression(node);
+      case NodeType.ParenthesizedExpression:
+        return this.visitParenthesizedExpr(node);
     }
   }
 }

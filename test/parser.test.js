@@ -5,13 +5,13 @@ import * as yaml from "js-yaml";
 const raw = String.raw;
 
 function parse(code, tree) {
-  const src = new Source(code);
-  const lexer = new Lexer(src);
-  const parser = new Parser(lexer);
-  const node = parser.parseChunk();
-  const v = new YamlVisitor();
-  const out = v.visitChunk(node);
   test(code, () => {
+    const src = new Source(code);
+    const lexer = new Lexer(src);
+    const parser = new Parser(lexer);
+    const node = parser.parseChunk();
+    const v = new YamlVisitor();
+    const out = v.visitChunk(node);
     expect(yaml.dump(out).trim()).toBe(tree.trim());
   });
 }
@@ -691,20 +691,22 @@ body:
       - type: Id
         value: c
     right:
-      - type: BinaryExpr
-        op: ..
-        left:
-          type: Id
-          value: a
-        right:
+      - type: ParenExpr
+        expr:
           type: BinaryExpr
           op: ..
           left:
             type: Id
-            value: b
+            value: a
           right:
-            type: Id
-            value: c
+            type: BinaryExpr
+            op: ..
+            left:
+              type: Id
+              value: b
+            right:
+              type: Id
+              value: c
 `;
 parse(code, tree);
 
@@ -1549,7 +1551,7 @@ body:
             computed: true
           - type: ObjProp
             key:
-              type: Id
+              type: String
               value: alo
             value:
               type: Number
@@ -1812,7 +1814,7 @@ body:
         props:
           - type: ObjProp
             key:
-              type: Id
+              type: String
               value: x
             value:
               type: Number
@@ -1897,7 +1899,7 @@ body:
         props:
           - type: ObjProp
             key:
-              type: Id
+              type: String
               value: x
             value:
               type: Number
@@ -1913,7 +1915,7 @@ body:
             computed: false
           - type: ObjMethod
             key:
-              type: Id
+              type: String
               value: z
             params: []
             body: []
@@ -2009,14 +2011,16 @@ body:
         value: '0'
   - type: WhileStmt
     test:
-      type: BinaryExpr
-      op: <
-      left:
-        type: Id
-        value: i
-      right:
-        type: Number
-        value: '10'
+      type: ParenExpr
+      expr:
+        type: BinaryExpr
+        op: <
+        left:
+          type: Id
+          value: i
+        right:
+          type: Number
+          value: '10'
     body:
       - type: AssignStmt
         left:

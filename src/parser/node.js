@@ -21,6 +21,7 @@ export class NodeType {
   static ObjectMember = "ObjectMember";
   static ObjectProperty = "ObjectProperty";
   static ObjectMethod = "ObjectMethod";
+  static ParenthesizedExpression = "ParenthesizedExpression";
   static CallStatement = "CallStatement";
   static AssignStatement = "AssignStatement";
   static Function = "Function";
@@ -150,6 +151,12 @@ export class ObjectExpression extends Expression {
   /** @type Array<ObjectProperty|ObjectMethod> */
   properties = [];
   isArray = true;
+}
+
+export class ParenthesizedExpression extends Expression {
+  type = NodeType.ParenthesizedExpression;
+  /** @type Expression */
+  expr = null;
 }
 
 export class ObjectMember extends Node {

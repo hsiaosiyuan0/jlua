@@ -53,7 +53,7 @@ export class YamlVisitor extends AstVisitor {
   visitForStmt(node) {
     return {
       type: "ForStmt",
-      init: [node.exp1, node.exp2, node.exp3].map(
+      init: [node.expr1, node.expr2, node.expr3].map(
         expr => expr && this.visitExpr(expr)
       ),
       body: node.body.map(stmt => this.visitStmt(stmt))
@@ -212,6 +212,13 @@ export class YamlVisitor extends AstVisitor {
       params: node.params.map(p => this.visitExpr(p)),
       body: node.body.map(expr => this.visitStmt(expr)),
       isLocal: node.isLocal
+    };
+  }
+
+  visitParenthesizedExpr(node) {
+    return {
+      type: "ParenExpr",
+      expr: this.visitExpr(node.expr)
     };
   }
 }

@@ -10,6 +10,7 @@ import {
   CallStatement,
   Chunk,
   DoStatement,
+  Expression,
   ForInStatement,
   ForStatement,
   FunctionDecExpr,
@@ -22,6 +23,7 @@ import {
   ObjectExpression,
   ObjectMethod,
   ObjectProperty,
+  ParenthesizedExpression,
   RepeatStatement,
   ReturnStatement,
   SequenceExpression,
@@ -389,7 +391,7 @@ export class Parser {
   }
 
   parseExp() {
-    const node = this.parsePrimary();
+    const node = this.parseVar();
     if (node === null) return null;
     return this.parseExpOp(node, 0);
   }
@@ -403,7 +405,7 @@ export class Parser {
     let ahead = this.lexer.peek();
     while (ahead.isBinOp() && ahead.prec >= prec) {
       let op = this.lexer.next();
-      let rhs = this.parsePrimary();
+      let rhs = this.parseVar();
       ahead = this.lexer.peek();
       while (
         (ahead.isBinOp() && ahead.prec > op.prec) ||
@@ -452,13 +454,18 @@ export class Parser {
     }
     if (tok.isName()) {
       tok = this.lexer.next();
-      return this.parsePrefixExp(tok);
+      const node = new Identifier();
+      node.name = tok.text;
+      node.loc = tok.loc;
+      return this.parsePrefixExp(node);
     }
     if (tok.isSign(Sign.ParenL)) {
       this.lexer.next();
       const node = this.parseExp();
       this.nextMustBeSign(Sign.ParenR);
-      return node;
+      const p = new ParenthesizedExpression();
+      p.expr = node;
+      return p;
     }
     if (tok.isUnary()) {
       tok = this.lexer.next();
@@ -542,34 +549,23 @@ export class Parser {
         prop = new ObjectProperty();
         prop.key = key;
         prop.value = value;
-        prop.computed = computed;
       }
+      if (prop.key instanceof Identifier) {
+        const s = new StringLiteral();
+        s.value = prop.key["name"];
+        prop.key = s;
+      }
+      prop.computed = computed;
       node.properties.push(prop);
     }
     return node;
   }
 
   parseVar() {
-    let tok = this.lexer.peek();
-    if (tok.isName() || tok.isSign(Sign.ParenL)) {
-      const left = this.lexer.next();
-      return this.parsePrefixExp(left);
-    }
-    return null;
+    return this.parsePrefixExp(this.parsePrimary());
   }
 
   parsePrefixExp(left) {
-    if (left.isSign && left.isSign(Sign.ParenL)) {
-      left = this.parseExp();
-      left = this.parsePrefixExp(left);
-      this.nextMustBeSign(Sign.ParenR);
-    }
-    if (left.isName && left.isName()) {
-      const node = new Identifier();
-      node.name = left.text;
-      node.loc = left.loc;
-      left = node;
-    }
     while (true) {
       let tok = this.lexer.peek();
       if (tok.isSign(Sign.Colon)) {
