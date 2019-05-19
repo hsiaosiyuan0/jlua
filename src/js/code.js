@@ -47,6 +47,15 @@ export const opMap = {
   not: "!"
 };
 
+const loc = (node, start, end) => {
+  start = start.source ? start : start.loc;
+  end = end && end.source ? end : end && end.loc;
+  let _loc = start;
+  if (end) _loc.end = end.end;
+  node.loc = _loc;
+  return node;
+};
+
 export class JsCodegen extends AstVisitor {
   constructor() {
     super();
@@ -74,6 +83,11 @@ export class JsCodegen extends AstVisitor {
     rhs = rhs === undefined ? null : rhs;
     return lhs !== rhs;
   };
+  global.__add__ = (lhs, rhs) => {
+    let add = typeof lhs['__add'] === 'function' ? lhs.__add :
+      typeof rhs['__add'] === 'function' ? rhs.__add : (l, r) => l + r;
+    return add(lhs, rhs);
+  };
   global.pairs = (o) => {
     if(Array.isArray(o)) return o.entries();
     return o;
@@ -81,8 +95,9 @@ export class JsCodegen extends AstVisitor {
 `);
   }
 
-  visitChunk(node) {
+  visitChunk(node, src) {
     this.enterScope();
+    this.scope.addLocal("require");
     let body = JsCodegen.prepareRuntime();
     body = body.concat(node.body.map(stmt => this.visitStmt(stmt)));
     this.leaveScope();
@@ -130,6 +145,11 @@ export class JsCodegen extends AstVisitor {
     return t.expressionStatement(assignExpr);
   }
 
+  assertLocal(name) {
+    if (this.scope.isLocal(name))
+      throw new Error(`Identifier '${name}' already been declared`);
+  }
+
   visitVarDecStmt(node) {
     const left = node.nameList;
     const lLen = left.length;
@@ -144,10 +164,14 @@ export class JsCodegen extends AstVisitor {
 
     let lhs = null;
     if (lLen === 1) {
-      lhs = t.identifier(left[0].name);
-      this.scope.addLocal(left[0].name);
+      const name = left[0].name;
+      this.assertLocal(name);
+      lhs = t.identifier(name);
+      lhs.loc = left[0].loc;
+      this.scope.addLocal(name);
     } else {
       lhs = left.map(expr => {
+        this.assertLocal(expr.name);
         this.scope.addLocal(expr.name);
         return t.identifier(expr.name);
       });
@@ -172,7 +196,7 @@ export class JsCodegen extends AstVisitor {
     }
 
     const decor = t.variableDeclarator(lhs, rhs);
-    return t.variableDeclaration("let", [decor]);
+    return loc(t.variableDeclaration("let", [decor]), node);
   }
 
   visitDoStmt(node) {
@@ -185,47 +209,76 @@ export class JsCodegen extends AstVisitor {
   }
 
   visitBlockStmt(node) {
-    return t.blockStatement(node.body.map(stmt => this.visitStmt(stmt)));
+    this.enterScope();
+    const n = t.blockStatement(node.body.map(stmt => this.visitStmt(stmt)));
+    this.leaveScope();
+    return n;
   }
 
   visitIfStmt(node) {
-    return t.ifStatement(
-      this.visitExpr(node.test),
-      t.blockStatement(node.consequent.map(stmt => this.visitStmt(stmt))),
-      node.alternate && this.visitStmt(node.alternate)
+    const test = this.visitExpr(node.test);
+    this.enterScope();
+    const consequent = t.blockStatement(
+      node.consequent.map(stmt => this.visitStmt(stmt))
+    );
+    this.leaveScope();
+    return loc(
+      t.ifStatement(
+        test,
+        consequent,
+        node.alternate && loc(this.visitStmt(node.alternate), node.alternate)
+      ),
+      node
     );
   }
 
   visitFuncDecStmt(node) {
-    const id = node.id && t.identifier(node.id.name);
-    const params = node.params.map(expr => t.identifier(expr, name));
+    let id;
+    if (node.id) {
+      this.assertLocal(node.id.name);
+      this.scope.addLocal(node.id.name);
+      id = t.identifier(node.id && node.id.name);
+    }
+    this.enterScope();
+    const params = node.params.map(expr => {
+      this.scope.addLocal(expr.name);
+      return t.identifier(expr.name);
+    });
     const body = t.blockStatement(node.body.map(stmt => this.visitStmt(stmt)));
     if (node.isLocal) {
       return t.variableDeclaration("let", [
         t.variableDeclarator(id, t.functionExpression(null, params, body))
       ]);
     }
-    return t.expressionStatement(
-      t.assignmentExpression(
-        "=",
-        t.memberExpression(t.identifier("global"), id),
-        t.functionExpression(null, params, body)
-      )
+    this.leaveScope();
+    return loc(
+      t.expressionStatement(
+        t.assignmentExpression(
+          "=",
+          t.memberExpression(t.identifier("global"), id),
+          t.functionExpression(null, params, body)
+        )
+      ),
+      node
     );
   }
 
   visitReturnStmt(node) {
     const args = node.body;
     const argsLen = args.length;
-    if (argsLen === 0) return t.returnStatement();
-    if (argsLen === 1) return t.returnStatement(this.visitExpr(args[0]));
-    return t.returnStatement(
-      t.arrayExpression(args.map(expr => this.visitExpr(expr)))
+    if (argsLen === 0) return loc(t.returnStatement(), node);
+    if (argsLen === 1)
+      return loc(t.returnStatement(this.visitExpr(args[0])), node);
+    return loc(
+      t.returnStatement(
+        t.arrayExpression(args.map(expr => this.visitExpr(expr)))
+      ),
+      node
     );
   }
 
   visitBreakStmt(node) {
-    return t.breakStatement();
+    return loc(t.breakStatement(), node);
   }
 
   visitWhileStmt(node) {
@@ -236,19 +289,22 @@ export class JsCodegen extends AstVisitor {
   }
 
   visitRepeatStmt(node) {
-    return t.doWhileStatement(
-      t.unaryExpression(
-        "!",
-        t.parenthesizedExpression(this.visitExpr(node.test))
+    return loc(
+      t.doWhileStatement(
+        t.unaryExpression(
+          "!",
+          t.parenthesizedExpression(this.visitExpr(node.test))
+        ),
+        t.blockStatement(node.body.map(stmt => this.visitStmt(stmt)))
       ),
-      t.blockStatement(node.body.map(stmt => this.visitStmt(stmt)))
+      node
     );
   }
 
   visitForStmt(node) {
     const initLeft = node.expr1.left.expressions[0];
     const initRight = node.expr1.right.expressions[0];
-    const id = t.identifier(initLeft.name);
+    const id = loc(t.identifier(initLeft.name), initLeft);
     this.scope.addLocal(initLeft.name);
     const from = t.identifier("__from");
     const to = t.identifier("__to__");
@@ -270,11 +326,14 @@ export class JsCodegen extends AstVisitor {
       t.binaryExpression("<=", id, to)
     );
     const update = t.assignmentExpression("+=", id, step);
-    return t.forStatement(
-      init,
-      test,
-      update,
-      t.blockStatement(node.body.map(stmt => this.visitStmt(stmt)))
+    return loc(
+      t.forStatement(
+        init,
+        test,
+        update,
+        t.blockStatement(node.body.map(stmt => this.visitStmt(stmt)))
+      ),
+      node
     );
   }
 
@@ -291,11 +350,16 @@ export class JsCodegen extends AstVisitor {
         )
       )
     ]);
-    const right = this.visitExpr(node.exprList[0]);
-    return t.forOfStatement(
-      left,
-      right,
-      t.blockStatement(node.body.map(stmt => this.visitStmt(stmt)))
+    const right = t.callExpression(t.identifier("pairs"), [
+      this.visitExpr(node.exprList[0])
+    ]);
+    return loc(
+      t.forOfStatement(
+        left,
+        right,
+        t.blockStatement(node.body.map(stmt => this.visitStmt(stmt)))
+      ),
+      node
     );
   }
 
@@ -303,20 +367,33 @@ export class JsCodegen extends AstVisitor {
     let prop;
     if (node.computed) prop = this.visitExpr(node.property);
     else prop = t.identifier(node.property.name);
-    return t.memberExpression(this.visitExpr(node.object), prop, node.computed);
+    return loc(
+      t.memberExpression(this.visitExpr(node.object), prop, node.computed),
+      node
+    );
   }
 
   visitFunctionDecExpr(node) {
-    const id = node.id && t.identifier(node.id.name);
-    const params = node.params.map(expr => t.identifier(expr.name));
+    let id;
+    if (node.id) {
+      this.assertLocal(node.id.name);
+      this.scope.addLocal(node.id.name);
+      id = t.identifier(node.id && node.id.name);
+    }
+    this.enterScope();
+    const params = node.params.map(expr => {
+      this.scope.addLocal(expr.name);
+      return t.identifier(expr.name);
+    });
     const body = node.body.map(stmt => this.visitStmt(stmt));
-    return t.functionExpression(id, params, t.blockStatement(body));
+    this.leaveScope();
+    return loc(t.functionExpression(id, params, t.blockStatement(body)), node);
   }
 
   visitCallExpr(node) {
     const callee = this.visitExpr(node.callee);
     const args = node.args.map(expr => this.visitExpr(expr));
-    return t.callExpression(callee, args);
+    return loc(t.callExpression(callee, args), callee);
   }
 
   visitObjectExpression(node) {
@@ -331,8 +408,9 @@ export class JsCodegen extends AstVisitor {
           return this.visitExpr(fn);
         })
       );
-    return t.objectExpression(
-      node.properties.map(m => this.visitObjectMember(m))
+    return loc(
+      t.objectExpression(node.properties.map(m => this.visitObjectMember(m))),
+      node
     );
   }
 
@@ -343,27 +421,33 @@ export class JsCodegen extends AstVisitor {
   }
 
   visitObjectProperty(node) {
-    return t.objectProperty(
-      this.visitExpr(node.key),
-      this.visitExpr(node.value),
-      node.computed
+    return loc(
+      t.objectProperty(
+        this.visitExpr(node.key),
+        this.visitExpr(node.value),
+        node.computed
+      ),
+      node
     );
   }
 
   visitObjectMethod(node) {
     const params = node.params.map(expr => t.identifier(expr.name));
     const body = t.blockStatement(node.body.map(stmt => this.visitStmt(stmt)));
-    return t.objectMethod(
-      "method",
-      this.visitExpr(node.key),
-      params,
-      body,
-      node.computed
+    return loc(
+      t.objectMethod(
+        "method",
+        this.visitExpr(node.key),
+        params,
+        body,
+        node.computed
+      ),
+      node
     );
   }
 
   visitParenthesizedExpr(node) {
-    return t.parenthesizedExpression(this.visitExpr(node.expr));
+    return loc(t.parenthesizedExpression(this.visitExpr(node.expr)), node);
   }
 
   visitBinaryExpr(node) {
@@ -372,50 +456,69 @@ export class JsCodegen extends AstVisitor {
     const left = this.visitExpr(node.left);
     const right = this.visitExpr(node.right);
     if (op === "===") {
-      return t.callExpression(t.identifier("__eq__"), [left, right]);
+      return loc(
+        t.callExpression(t.identifier("__eq__"), [left, right]),
+        left,
+        right
+      );
     } else if (op === "!==") {
-      return t.callExpression(t.identifier("__neq__"), [left, right]);
+      return loc(
+        t.callExpression(t.identifier("__neq__"), [left, right]),
+        left,
+        right
+      );
+    } else if (op === "&&" || op === "||") {
+      return loc(t.logicalExpression(op, left, right), left, right);
+    } else if (op === "+") {
+      return loc(
+        t.callExpression(t.identifier("__add__"), [left, right]),
+        left,
+        right
+      );
     }
-    return t.binaryExpression(op, left, right);
+    return loc(t.binaryExpression(op, left, right), left, right);
   }
 
   visitUnaryExpr(node) {
     let op = node.operator;
     op = opMap[op] || op;
     if (op === "#") {
-      return t.parenthesizedExpression(
-        t.memberExpression(
-          this.visitExpr(node.argument),
-          t.identifier("length")
-        )
+      return loc(
+        t.parenthesizedExpression(
+          t.memberExpression(
+            this.visitExpr(node.argument),
+            t.identifier("length")
+          )
+        ),
+        node
       );
     }
-    return t.unaryExpression(op, this.visitExpr(node.argument));
+    return loc(t.unaryExpression(op, this.visitExpr(node.argument)), node);
   }
 
   visitStringLiteral(node) {
-    return t.stringLiteral(node.value);
+    return loc(t.stringLiteral(node.value), node);
   }
 
   visitIdentifier(node) {
     if (this.scope.isGlobal(node.name)) {
-      return t.memberExpression(
-        t.identifier("global"),
-        t.identifier(node.name)
+      return loc(
+        t.memberExpression(t.identifier("global"), t.identifier(node.name)),
+        node
       );
     }
-    return t.identifier(node.name);
+    return loc(t.identifier(node.name), node);
   }
 
   visitNumberLiteral(node) {
-    return t.numericLiteral(parseFloat(node.value));
+    return loc(t.numericLiteral(parseFloat(node.value)), node);
   }
 
   visitBooleanLiteral(node) {
-    return t.booleanLiteral(node.value === "true");
+    return loc(t.booleanLiteral(node.value === "true"), node);
   }
 
   visitNilLiteral(node) {
-    return t.nullLiteral();
+    return loc(t.nullLiteral(), node);
   }
 }

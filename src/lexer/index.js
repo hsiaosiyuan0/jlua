@@ -155,10 +155,10 @@ export class Lexer {
     let ch = this.src.peek(2);
     if (ch !== "--") return null;
 
-    // consume --
-    this.src.read(2);
     const tok = new Token(TokenType.Comment);
     tok.setStart(this);
+    // consume --
+    this.src.read(2);
 
     const chs = [];
     ch = this.src.peek(2);
@@ -190,9 +190,9 @@ export class Lexer {
     let ch = this.src.peek();
     if (!Lexer.isNameBegin(ch)) return null;
 
-    const chs = [this.src.read()];
     const tok = new Token();
     tok.setStart(this);
+    const chs = [this.src.read()];
 
     while (true) {
       ch = this.src.peek();
@@ -213,9 +213,9 @@ export class Lexer {
     let ch = this.src.peek();
     if (!Lexer.isDigit(ch)) return null;
 
-    const chs = [this.src.read()];
     const tok = new Token(TokenType.Number);
     tok.setStart(this);
+    const chs = [this.src.read()];
 
     let ahead;
     if (ch === "0" && ((ahead = this.src.peek()) === "x" || ahead === "X")) {
@@ -271,9 +271,9 @@ export class Lexer {
     )
       return null;
 
-    let ch = this.src.read();
     const tok = new Token(TokenType.String);
     tok.setStart(this);
+    let ch = this.src.read();
 
     const chs = [];
     if (ch === "'" || ch === '"') {
@@ -415,42 +415,42 @@ export class Lexer {
       case ":":
       case ";":
       case ",": {
-        chs.push(this.src.read());
         tok.setStart(this);
+        chs.push(this.src.read());
         break;
       }
       case "/": {
-        chs.push(this.src.read());
         tok.setStart(this);
+        chs.push(this.src.read());
         ch = this.src.peek();
         if (ch === "/") chs.push(this.src.read());
         break;
       }
       case "=": {
-        chs.push(this.src.read());
         tok.setStart(this);
+        chs.push(this.src.read());
         ch = this.src.peek();
         if (ch === "=") chs.push(this.src.read());
         break;
       }
       case "~": {
-        chs.push(this.src.read());
         tok.setStart(this);
+        chs.push(this.src.read());
         ch = this.src.peek();
         if (ch === "=") chs.push(this.src.read());
         break;
       }
       case ">":
       case "<": {
-        chs.push(this.src.read());
         tok.setStart(this);
+        chs.push(this.src.read());
         const ch1 = this.src.peek();
         if (ch1 === "=" || ch === ch1) chs.push(this.src.read());
         break;
       }
       case ".": {
-        chs.push(this.src.read());
         tok.setStart(this);
+        chs.push(this.src.read());
         ch = this.src.peek();
         if (ch === ".") chs.push(this.src.read());
         ch = this.src.peek();

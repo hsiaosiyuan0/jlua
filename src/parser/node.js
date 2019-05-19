@@ -41,6 +41,22 @@ export class Node {
   /** @type {string} */
   type = NodeType.Error;
   loc = new SourceLoc();
+
+  setLocStart(parserOrNode) {
+    if (parserOrNode.loc) {
+      this.loc = parserOrNode.loc
+    } else {
+      this.loc.source = parserOrNode.lexer.src.file;
+      this.loc.start = parserOrNode.lexer.src.pos;
+    }
+    return this;
+  }
+
+  setLocEnd(parserOrNode) {
+    if (parserOrNode.loc) this.loc.end = parserOrNode.loc.end;
+    else this.loc.end = parserOrNode.lexer.src.pos;
+    return this;
+  }
 }
 
 export class Statement extends Node {}
