@@ -124,7 +124,7 @@ export class NilLiteral extends Literal {
 
 export class MemberExpression extends Expression {
   type = NodeType.MemberExpression;
-  /** @type Expression */
+  /** @type Expression|Identifier */
   object = null;
   /** @type Expression|Identifier */
   property = null;
@@ -166,7 +166,7 @@ export class ObjectExpression extends Expression {
   type = NodeType.ObjectExpression;
   /** @type Array<ObjectProperty|ObjectMethod> */
   properties = [];
-  isArray = true;
+  isArray = false;
 }
 
 export class ParenthesizedExpression extends Expression {

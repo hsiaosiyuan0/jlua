@@ -7,11 +7,27 @@ import {
   NodeType,
   NumericLiteral
 } from "../parser";
+import * as runtime from "./runtime";
+
+const hasRuntimeDef = name => runtime[name] !== undefined;
+
+export class ClassDef {
+  constructor(name, parent = null) {
+    this.name = name;
+    this.parent = parent;
+  }
+}
 
 export class Scope {
   constructor(parent = null) {
     this.parent = parent;
     this.slots = [];
+    this.depth = parent ? parent.depth + 1 : 0;
+    this.inFnDec = false;
+    this.inClassMethod = false;
+    this.inClass = null;
+    this.classDefs = {};
+    this.ctor = null;
   }
 
   isLocal(name) {
@@ -22,17 +38,62 @@ export class Scope {
     if (!this.isLocal(name)) this.slots.push(name);
   }
 
+  addClassDef(name, parent) {
+    parent = this.getClassDef(parent);
+    if (!parent) parent = new ClassDef(parent);
+    const def = new ClassDef(name, parent);
+    this.classDefs[def.name] = def;
+  }
+
+  getClassDef(name) {
+    let parent = this;
+    while (parent) {
+      const def = parent.classDefs[name];
+      if (def !== undefined) return def;
+      parent = parent.parent;
+    }
+    return null;
+  }
+
+  isClassDef(name) {
+    let parent = this;
+    while (parent) {
+      if (parent.classDefs[name] !== undefined) return true;
+      parent = parent.parent;
+    }
+    return false;
+  }
+
   isGlobal(name) {
     if (this.isLocal(name)) return false;
     let parent = this;
-    while ((parent = parent.parent) !== null) {
+    while (parent !== null) {
       if (parent.isLocal(name)) return false;
+      parent = parent.parent;
     }
     return true;
   }
 
   enter() {
     return new Scope(this);
+  }
+
+  isInClassMethod() {
+    let parent = this;
+    while (parent !== null) {
+      if (parent.inClassMethod) return true;
+      parent = parent.parent;
+    }
+    return false;
+  }
+
+  getInClass() {
+    let parent = this;
+    while (parent !== null) {
+      if (parent.inClass) return this.getClassDef(parent.inClass);
+      parent = parent.parent;
+    }
+    return null;
   }
 }
 
@@ -59,6 +120,7 @@ const loc = (node, start, end) => {
 export class JsCodegen extends AstVisitor {
   constructor() {
     super();
+    this.exportCnt = 0;
     this.scope = new Scope();
   }
 
@@ -72,34 +134,15 @@ export class JsCodegen extends AstVisitor {
 
   static prepareRuntime() {
     return template.ast(`
-  global.print = console.log
-  global.__eq__ = (lhs, rhs) => {
-    lhs = lhs === undefined ? null : lhs;
-    rhs = rhs === undefined ? null : rhs;
-    return lhs === rhs;
-  };
-  global.__neq__ = (lhs, rhs) => {
-    lhs = lhs === undefined ? null : lhs;
-    rhs = rhs === undefined ? null : rhs;
-    return lhs !== rhs;
-  };
-  global.__add__ = (lhs, rhs) => {
-    let add = typeof lhs['__add'] === 'function' ? lhs.__add :
-      typeof rhs['__add'] === 'function' ? rhs.__add : (l, r) => l + r;
-    return add(lhs, rhs);
-  };
-  global.pairs = (o) => {
-    if(Array.isArray(o)) return o.entries();
-    return o;
-  };
+  const __jlua__ =  require("jlua/lib/js/runtime");
 `);
   }
 
   visitChunk(node, src) {
     this.enterScope();
     this.scope.addLocal("require");
-    let body = JsCodegen.prepareRuntime();
-    body = body.concat(node.body.map(stmt => this.visitStmt(stmt)));
+    const body = node.body.map(stmt => this.visitStmt(stmt));
+    body.unshift(JsCodegen.prepareRuntime());
     this.leaveScope();
     return t.program(body);
   }
@@ -150,6 +193,11 @@ export class JsCodegen extends AstVisitor {
       throw new Error(`Identifier '${name}' already been declared`);
   }
 
+  assertClassDef(name) {
+    if (!this.scope.isClassDef(name))
+      throw new Error(`Class ${name} must be defined before it's being used`);
+  }
+
   visitVarDecStmt(node) {
     const left = node.nameList;
     const lLen = left.length;
@@ -161,6 +209,26 @@ export class JsCodegen extends AstVisitor {
       rLastExpr.type === NodeType.CallExpression ||
       rLastExpr.type === NodeType.VarArgExpression;
     const rMiss = lLen - rLen;
+
+    if (
+      rLen === 1 &&
+      rLastExpr.type === NodeType.CallExpression &&
+      rLastExpr.callee.name === "class"
+    ) {
+      if (lLen !== 1)
+        throw new Error("only one lhs is permitted when defining class");
+      const name = left[0].name;
+      this.assertLocal(name);
+      let parent;
+      if (
+        rLastExpr.args.length &&
+        rLastExpr.args[0].type === NodeType.Identifier
+      ) {
+        parent = rLastExpr.args[0].name;
+      }
+      this.scope.ctor = name;
+      this.scope.addClassDef(name, parent);
+    }
 
     let lhs = null;
     if (lLen === 1) {
@@ -227,51 +295,6 @@ export class JsCodegen extends AstVisitor {
         test,
         consequent,
         node.alternate && loc(this.visitStmt(node.alternate), node.alternate)
-      ),
-      node
-    );
-  }
-
-  visitFuncDecStmt(node) {
-    let id;
-    if (node.id) {
-      this.assertLocal(node.id.name);
-      this.scope.addLocal(node.id.name);
-      id = t.identifier(node.id && node.id.name);
-    }
-    this.enterScope();
-    const params = node.params.map(expr => {
-      this.scope.addLocal(expr.name);
-      return t.identifier(expr.name);
-    });
-    const body = t.blockStatement(node.body.map(stmt => this.visitStmt(stmt)));
-    if (node.isLocal) {
-      return t.variableDeclaration("let", [
-        t.variableDeclarator(id, t.functionExpression(null, params, body))
-      ]);
-    }
-    this.leaveScope();
-    return loc(
-      t.expressionStatement(
-        t.assignmentExpression(
-          "=",
-          t.memberExpression(t.identifier("global"), id),
-          t.functionExpression(null, params, body)
-        )
-      ),
-      node
-    );
-  }
-
-  visitReturnStmt(node) {
-    const args = node.body;
-    const argsLen = args.length;
-    if (argsLen === 0) return loc(t.returnStatement(), node);
-    if (argsLen === 1)
-      return loc(t.returnStatement(this.visitExpr(args[0])), node);
-    return loc(
-      t.returnStatement(
-        t.arrayExpression(args.map(expr => this.visitExpr(expr)))
       ),
       node
     );
@@ -373,6 +396,92 @@ export class JsCodegen extends AstVisitor {
     );
   }
 
+  static refJlua(id) {
+    return t.memberExpression(t.identifier("__jlua__"), id);
+  }
+
+  visitFuncDecStmt(node) {
+    let id;
+    if (node.id) {
+      if (node.id.type === NodeType.Identifier) {
+        this.assertLocal(node.id.name);
+        this.scope.addLocal(node.id.name);
+        id = t.identifier(node.id && node.id.name);
+      } else if (
+        node.id.type === NodeType.BinaryExpression &&
+        node.id.operator === ":"
+      ) {
+        const klass = node.id.left;
+        this.assertClassDef(klass.name);
+        id = t.memberExpression(
+          t.memberExpression(
+            t.identifier(klass.name),
+            t.identifier("prototype")
+          ),
+          t.identifier(node.id.right.name)
+        );
+        this.scope.inClassMethod = true;
+        this.scope.inClass = klass.name;
+      }
+    }
+    this.enterScope();
+    this.scope.inFnDec = true;
+    const params = node.params.map(expr => {
+      this.scope.addLocal(expr.name);
+      return t.identifier(expr.name);
+    });
+    const body = t.blockStatement(node.body.map(stmt => this.visitStmt(stmt)));
+    if (node.isLocal) {
+      return loc(
+        t.variableDeclaration("let", [
+          t.variableDeclarator(id, t.functionExpression(null, params, body))
+        ]),
+        node
+      );
+    }
+    this.leaveScope();
+    if (id.type === NodeType.Identifier) id = JsCodegen.refJlua(id);
+    return loc(
+      t.expressionStatement(
+        t.assignmentExpression(
+          "=",
+          id,
+          t.functionExpression(null, params, body)
+        )
+      ),
+      node
+    );
+  }
+
+  visitReturnStmt(node) {
+    const args = node.body;
+    const argsLen = args.length;
+    if (this.scope.depth === 1) {
+      if (this.exportCnt > 1) throw new Error("only one export per module");
+      if (argsLen !== 1) throw new Error("only one object per export");
+      this.exportCnt++;
+      return loc(
+        t.expressionStatement(
+          t.assignmentExpression(
+            "=",
+            t.memberExpression(t.identifier("module"), t.identifier("exports")),
+            this.visitExpr(args[0])
+          )
+        ),
+        node
+      );
+    }
+    if (argsLen === 0) return loc(t.returnStatement(), node);
+    if (argsLen === 1)
+      return loc(t.returnStatement(this.visitExpr(args[0])), node);
+    return loc(
+      t.returnStatement(
+        t.arrayExpression(args.map(expr => this.visitExpr(expr)))
+      ),
+      node
+    );
+  }
+
   visitFunctionDecExpr(node) {
     let id;
     if (node.id) {
@@ -381,6 +490,7 @@ export class JsCodegen extends AstVisitor {
       id = t.identifier(node.id && node.id.name);
     }
     this.enterScope();
+    this.scope.inFnDec = true;
     const params = node.params.map(expr => {
       this.scope.addLocal(expr.name);
       return t.identifier(expr.name);
@@ -391,8 +501,40 @@ export class JsCodegen extends AstVisitor {
   }
 
   visitCallExpr(node) {
-    const callee = this.visitExpr(node.callee);
     const args = node.args.map(expr => this.visitExpr(expr));
+    if (
+      this.scope.isInClassMethod() &&
+      node.callee.type === NodeType.MemberExpression &&
+      node.callee.object.type === NodeType.Identifier &&
+      node.callee.object.name === "super"
+    ) {
+      let tmp = `Object.getPrototypeOf(OBJ).METHOD.call(ARGS);`;
+      if (node.computed) tmp = `Object.getPrototypeOf(OBJ)[METHOD].call(ARGS);`;
+      let build = template(tmp);
+      args.unshift(t.thisExpression());
+      const klass = this.scope.getInClass();
+      if (klass.parent === null) throw new Error(`class ${klass} has no super`);
+      return loc(
+        build({
+          OBJ: t.memberExpression(
+            t.identifier(klass.name),
+            t.identifier("prototype")
+          ),
+          METHOD: this.visitExpr(node.callee.property),
+          ARGS: args
+        }).expression,
+        node
+      );
+    }
+    const callee = this.visitExpr(node.callee);
+    if (
+      this.scope.ctor &&
+      node.callee.type === NodeType.Identifier &&
+      node.callee.name === "class"
+    ) {
+      args.unshift(t.stringLiteral(this.scope.ctor));
+      this.scope.ctor = null;
+    }
     return loc(t.callExpression(callee, args), callee);
   }
 
@@ -457,13 +599,13 @@ export class JsCodegen extends AstVisitor {
     const right = this.visitExpr(node.right);
     if (op === "===") {
       return loc(
-        t.callExpression(t.identifier("__eq__"), [left, right]),
+        t.callExpression(JsCodegen.refJlua(t.identifier("eq")), [left, right]),
         left,
         right
       );
     } else if (op === "!==") {
       return loc(
-        t.callExpression(t.identifier("__neq__"), [left, right]),
+        t.callExpression(JsCodegen.refJlua(t.identifier("neq")), [left, right]),
         left,
         right
       );
@@ -471,7 +613,7 @@ export class JsCodegen extends AstVisitor {
       return loc(t.logicalExpression(op, left, right), left, right);
     } else if (op === "+") {
       return loc(
-        t.callExpression(t.identifier("__add__"), [left, right]),
+        t.callExpression(JsCodegen.refJlua(t.identifier("add")), [left, right]),
         left,
         right
       );
@@ -501,11 +643,11 @@ export class JsCodegen extends AstVisitor {
   }
 
   visitIdentifier(node) {
-    if (this.scope.isGlobal(node.name)) {
-      return loc(
-        t.memberExpression(t.identifier("global"), t.identifier(node.name)),
-        node
-      );
+    if (node.name === "self" && this.scope.inFnDec) {
+      return loc(t.identifier("this"), node);
+    }
+    if (this.scope.isGlobal(node.name) && hasRuntimeDef(node.name)) {
+      return loc(JsCodegen.refJlua(t.identifier(node.name)), node);
     }
     return loc(t.identifier(node.name), node);
   }

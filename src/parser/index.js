@@ -544,6 +544,7 @@ export class Parser {
           value = key;
           key = new NumericLiteral();
           key.value = (idx++).toString();
+          node.isArray = true;
         }
       }
       if (value instanceof FunctionDecExpr) {
