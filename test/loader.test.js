@@ -40,7 +40,9 @@ test("Inserts name and outputs JavaScript", async () => {
   const stats = await compile("test.lua");
   const output = stats.toJson().modules[0].source;
 
-  expect(output).toBe(
-    'import * as __jlua__ from "jlua/lib/js/runtime";\nlet a = 1;'
+  console.log(output);
+  expect(output).toBe(`const __jlua__ = require("jlua/lib/js/runtime");
+
+let a = 1;`
   );
 });

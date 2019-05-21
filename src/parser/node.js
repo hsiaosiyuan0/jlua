@@ -44,7 +44,7 @@ export class Node {
 
   setLocStart(parserOrNode) {
     if (parserOrNode.loc) {
-      this.loc = parserOrNode.loc
+      this.loc = parserOrNode.loc;
     } else {
       this.loc.source = parserOrNode.lexer.src.file;
       this.loc.start = parserOrNode.lexer.src.pos;

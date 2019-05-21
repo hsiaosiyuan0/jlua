@@ -628,9 +628,10 @@ export class Parser {
     return tok;
   }
 
-  nextMustBeName() {
+  nextMustBeName(kw) {
     const tok = this.lexer.next();
-    if (!tok.isName()) this.raiseUnexpectedTokErr(TokenType.Name, tok);
+    if (!tok.isName() && kw.indexOf(tok.text) === -1)
+      this.raiseUnexpectedTokErr(TokenType.Name, tok);
     return tok;
   }
 
@@ -654,7 +655,7 @@ export class Parser {
     const node = new MemberExpression();
     node.setLocStart(this.lexer.next());
     node.object = left;
-    const tok = this.nextMustBeName();
+    const tok = this.nextMustBeName(["then"]);
     const id = new Identifier();
     id.name = tok.text;
     id.loc = tok.loc;

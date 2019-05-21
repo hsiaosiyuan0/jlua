@@ -27,7 +27,7 @@ export const pairs = o => {
   return o;
 };
 
-module.exports.class = (name, base, init) => {
+const klass = (module.exports.class = (name, base, init) => {
   if (init === undefined) {
     init = base;
     base = false;
@@ -48,6 +48,7 @@ module.exports.class = (name, base, init) => {
     }
   };
   return wrap[name];
-};
+});
 
 export const isInstanceOf = (obj, klass) => obj instanceof klass;
+export const interopRequireDefault = m => (m.default ? m.default : m);
