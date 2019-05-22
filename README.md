@@ -7,4 +7,4 @@ Yet another Lua implementation in pure JavaScript. It encapsulates:
  bytecode for LuaVM, respectively
 * Particularly, `JsCodegen` translates Lua to JavaScript for running Lua on JavaScript runtime directly
 
-It's being developed. Stay tuned :)
+This a [demo](http://jlua.hsiaosiyuan.com) and here is the [source](https://github.com/hsiaosiyuan0/jlua-demo) of it.
