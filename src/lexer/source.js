@@ -3,7 +3,7 @@ import { LexerError } from "../lexer";
 export const NL = "\n";
 export const CR = "\r";
 export const EOL = "\n";
-export const EOF = "\0";
+export const EOF = "\x03";
 
 export class Position {
   constructor(ofst = -1, line = 1, column = 0) {
@@ -21,6 +21,7 @@ export class Source {
     this.ofst = -1;
     this.line = 1;
     this.col = 0;
+    this.isPeek = false;
     this.posStack = [];
   }
 
@@ -30,48 +31,40 @@ export class Source {
 
   read(cnt = 1) {
     const ret = [];
+    let ofst = this.ofst;
+    let c;
     while (cnt) {
-      const next = this.ofst + 1;
-      let c = this.code[next];
+      const next = ofst + 1;
+      c = this.code[next];
       if (c === undefined) {
-        ret.push(EOF);
+        c = EOF;
+        ret.push(c);
         break;
       }
-      this.ofst = next;
+      ofst = next;
       if (c === CR || c === NL) {
-        if (c === CR && this.code[next + 1] === NL) this.ofst++;
-        this.line++;
-        this.col = 0;
+        if (c === CR && this.code[next + 1] === NL) ofst++;
+        if (!this.isPeek) {
+          this.line++;
+          this.col = 0;
+        }
         c = EOL;
-      } else this.col++;
-      this.ch = c;
+      } else if (!this.isPeek) this.col++;
       ret.push(c);
       cnt--;
+    }
+    if (!this.isPeek) {
+      this.ch = c;
+      this.ofst = ofst;
     }
     return ret.join("");
   }
 
   peek(cnt = 1) {
-    const ret = [];
-    let ofst = this.ofst;
-    while (cnt) {
-      const next = ofst + 1;
-      let c = this.code[next];
-      if (c === undefined) {
-        ret.push(EOF);
-        break;
-      }
-      ofst = next;
-      if (c === CR || c === NL) {
-        if (c === CR && this.code[next + 1] === NL) {
-          ofst++;
-        }
-        c = EOL;
-      }
-      ret.push(c);
-      cnt--;
-    }
-    return ret.join("");
+    this.isPeek = true;
+    const ret = this.read(cnt);
+    this.isPeek = false;
+    return ret;
   }
 
   pushPos() {
