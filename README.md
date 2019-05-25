@@ -18,7 +18,7 @@ Here is a [demo](http://jlua.hsiaosiyuan.com), it's built with jlua and [Vue.js]
 local m = {
   data = function () 
     return {
-      hi = "lang"
+      hi = "Lua"
     }
   end
 }
