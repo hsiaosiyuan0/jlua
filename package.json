@@ -1,6 +1,6 @@
 {
   "name": "jlua",
-  "version": "0.0.1",
+  "version": "0.0.3",
   "description": "Yet another Lua implementation in pure JavaScript.",
   "main": "lib/index.js",
   "scripts": {
