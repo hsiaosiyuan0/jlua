@@ -1,6 +1,6 @@
 {
   "name": "jlua",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Yet another Lua implementation in pure JavaScript.",
   "main": "lib/index.js",
   "scripts": {
@@ -38,5 +38,10 @@
     "@babel/types": "^7.4.4",
     "long": "^4.0.0",
     "source-map": "^0.7.3"
-  }
+  },
+  "files": [
+    "src/",
+    "lib/",
+    "dist/"
+  ]
 }
