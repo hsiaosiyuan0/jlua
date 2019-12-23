@@ -22,7 +22,7 @@ function parse(code, tree) {
  */
 
 let code = raw`
-function f(a,b,c) 
+function f(a,b,c)
   do
     a = 1
   end
@@ -161,7 +161,7 @@ body:
         right:
           type: Number
           value: '4'
-        
+
 `;
 parse(code, tree);
 
@@ -1048,7 +1048,7 @@ body:
           body:
             - type: Id
               value: d
-          
+
 `;
 parse(code, tree);
 
@@ -1589,7 +1589,7 @@ body:
               type: Number
               value: '1.5'
             computed: false
-            
+
 `;
 parse(code, tree);
 

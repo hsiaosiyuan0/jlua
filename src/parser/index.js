@@ -179,7 +179,8 @@ export class Parser {
         Keyword.End
       ]);
       if (isEnd || tok.isEof()) break;
-      node.consequent.push(this.parseStmt());
+      const stmt = this.parseStmt();
+      if (stmt) node.consequent.push(stmt);
     }
     if (tok.isKeyword(Keyword.End)) {
       this.lexer.next();
