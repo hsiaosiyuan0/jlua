@@ -7,8 +7,8 @@ Yet another Lua implementation in pure JavaScript. It encapsulates:
  bytecode for LuaVM, respectively
 * Particularly, `JsCodegen` translates Lua to JavaScript for running Lua on JavaScript runtime directly, [more](https://github.com/hsiaosiyuan0/jlua/issues/4)
 
-Here is a [demo](http://jlua.hsiaosiyuan.com) naturally built with jlua and [Vue.js](https://vuejs.org/), in other words we can use Lua within Single File Component, for example:
- 
+Here is a [demo](http://jlua.thehardways.me/) naturally built with jlua and [Vue.js](https://vuejs.org/), in other words we can use Lua within Single File Component, for example:
+
  ```vue
 <template>
   <div>hi {{ lang }}</div>
@@ -16,7 +16,7 @@ Here is a [demo](http://jlua.hsiaosiyuan.com) naturally built with jlua and [Vue
 
 <script lang="lua">
 local m = {
-  data = function () 
+  data = function ()
     return {
       lang = "Lua"
     }
